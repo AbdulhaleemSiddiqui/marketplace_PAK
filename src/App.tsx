@@ -10,6 +10,8 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 
+import AdminDashboard from "./pages/admin/AdminDashboard";
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -37,6 +39,13 @@ export default function App() {
         <Route
           path="/profile"
           element={<Profile />}
+        />
+
+        <Route
+          path="/admin"
+          element={
+            <AdminDashboard />
+          }
         />
       </Routes>
     </BrowserRouter>
