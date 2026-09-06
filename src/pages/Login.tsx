@@ -6,12 +6,14 @@ import {
   } from "lucide-react";
   
   import {
+    useEffect,
     useState,
   } from "react";
   
   import {
     Link,
     useNavigate,
+    useSearchParams,
   } from "react-router-dom";
   
   import {
@@ -31,11 +33,33 @@ import {
       useNavigate();
   
     const [
+      searchParams,
+    ] = useSearchParams();
+  
+    const forcedRoleParam =
+      searchParams.get("role");
+  
+    const forcedRole:
+      UserRole | null =
+      forcedRoleParam ===
+        "buyer" ||
+      forcedRoleParam ===
+        "seller"
+        ? forcedRoleParam
+        : null;
+  
+    const returnUrl =
+      searchParams.get(
+        "returnUrl"
+      );
+  
+    const [
       role,
       setRole,
     ] =
       useState<UserRole>(
-        "buyer"
+        forcedRole ??
+          "buyer"
       );
   
     const [
@@ -58,6 +82,14 @@ import {
       setLoading,
     ] = useState(false);
   
+    useEffect(() => {
+      if (forcedRole) {
+        setRole(
+          forcedRole
+        );
+      }
+    }, [forcedRole]);
+  
     const handleLogin = (
       event:
         React.FormEvent
@@ -71,7 +103,7 @@ import {
         !password.trim()
       ) {
         setError(
-          "Email aur password enter karein."
+          "Email aur password required hain."
         );
   
         return;
@@ -83,15 +115,13 @@ import {
         const user =
           loginUser({
             email,
-  
             password,
-  
             role,
           });
   
-        // -------------------------------------
+        // =================================================
         // BUYER PENDING REQUIREMENT
-        // -------------------------------------
+        // =================================================
   
         const pending =
           getPendingRequirement();
@@ -102,18 +132,35 @@ import {
           pending
         ) {
           navigate(
-            "/?resumeRequirement=true"
+            "/?resumeRequirement=true",
+            {
+              replace: true,
+            }
           );
   
           return;
         }
   
-        // -------------------------------------
-        // NORMAL LOGIN
-        // -------------------------------------
+        // =================================================
+        // RETURN TO ORIGINAL PAGE
+        // =================================================
+  
+        if (returnUrl) {
+          navigate(
+            returnUrl,
+            {
+              replace: true,
+            }
+          );
+  
+          return;
+        }
   
         navigate(
-          "/profile"
+          "/profile",
+          {
+            replace: true,
+          }
         );
       } catch (exception) {
         setError(
@@ -128,8 +175,6 @@ import {
   
     return (
       <div className="min-h-screen bg-slate-50">
-        {/* HEADER */}
-  
         <header className="border-b border-slate-200 bg-white">
           <div className="mx-auto flex max-w-7xl items-center px-6 py-4">
             <Link
@@ -145,12 +190,8 @@ import {
           </div>
         </header>
   
-        {/* LOGIN */}
-  
         <main className="flex min-h-[calc(100vh-73px)] items-center justify-center px-5 py-10">
           <div className="w-full max-w-md">
-            {/* LOGO */}
-  
             <div className="text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-white">
                 <Sparkles
@@ -158,13 +199,19 @@ import {
                 />
               </div>
   
-              <h1 className="mt-5 text-3xl font-black text-slate-950">
-                Welcome back
+              <h1 className="mt-5 text-3xl font-black">
+                {forcedRole ===
+                "seller"
+                  ? "Seller Login"
+                  : forcedRole ===
+                      "buyer"
+                    ? "Buyer Login"
+                    : "Welcome Back"}
               </h1>
   
               <p className="mt-2 text-sm text-slate-500">
-                Login to your
-                KhojMarket account
+                Sign in to
+                KhojMarket
               </p>
             </div>
   
@@ -174,101 +221,63 @@ import {
               }
               className="mt-8 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm"
             >
-              {/* ROLE */}
+              {/* SHOW ROLE ONLY FOR NORMAL LOGIN */}
   
-              <p className="text-sm font-bold text-slate-800">
-                Login as
-              </p>
-  
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setRole(
-                      "buyer"
-                    )
-                  }
-                  className={`
-                    rounded-2xl
-                    border
-                    p-4
-                    text-left
-                    transition
-  
-                    ${
-                      role ===
-                      "buyer"
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-slate-200 hover:border-slate-300"
-                    }
-                  `}
-                >
-                  <ShoppingBag
-                    size={20}
-                    className={
-                      role ===
-                      "buyer"
-                        ? "text-blue-600"
-                        : "text-slate-400"
-                    }
-                  />
-  
-                  <p className="mt-3 font-bold">
-                    Buyer
+              {!forcedRole && (
+                <>
+                  <p className="text-sm font-bold">
+                    Login as
                   </p>
   
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Mujhe koi
-                    product/service
-                    chahiye
-                  </p>
-                </button>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRole(
+                          "buyer"
+                        )
+                      }
+                      className={`rounded-2xl border p-4 text-left ${
+                        role ===
+                        "buyer"
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-slate-200"
+                      }`}
+                    >
+                      <ShoppingBag
+                        size={20}
+                      />
   
-                <button
-                  type="button"
-                  onClick={() =>
-                    setRole(
-                      "seller"
-                    )
-                  }
-                  className={`
-                    rounded-2xl
-                    border
-                    p-4
-                    text-left
-                    transition
+                      <p className="mt-3 font-bold">
+                        Buyer
+                      </p>
+                    </button>
   
-                    ${
-                      role ===
-                      "seller"
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-slate-200 hover:border-slate-300"
-                    }
-                  `}
-                >
-                  <BriefcaseBusiness
-                    size={20}
-                    className={
-                      role ===
-                      "seller"
-                        ? "text-blue-600"
-                        : "text-slate-400"
-                    }
-                  />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRole(
+                          "seller"
+                        )
+                      }
+                      className={`rounded-2xl border p-4 text-left ${
+                        role ===
+                        "seller"
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-slate-200"
+                      }`}
+                    >
+                      <BriefcaseBusiness
+                        size={20}
+                      />
   
-                  <p className="mt-3 font-bold">
-                    Seller
-                  </p>
-  
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Main products /
-                    services offer
-                    karta hoon
-                  </p>
-                </button>
-              </div>
-  
-              {/* ERROR */}
+                      <p className="mt-3 font-bold">
+                        Seller
+                      </p>
+                    </button>
+                  </div>
+                </>
+              )}
   
               {error && (
                 <div className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
@@ -276,10 +285,8 @@ import {
                 </div>
               )}
   
-              {/* EMAIL */}
-  
               <div className="mt-6">
-                <label className="mb-2 block text-sm font-bold text-slate-700">
+                <label className="mb-2 block text-sm font-bold">
                   Email
                 </label>
   
@@ -294,20 +301,13 @@ import {
                         .value
                     )
                   }
-                  placeholder={
-                    role ===
-                    "buyer"
-                      ? "buyer@example.com"
-                      : "seller@example.com"
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-blue-500 focus:bg-white"
+                  placeholder="email@example.com"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
   
-              {/* PASSWORD */}
-  
               <div className="mt-5">
-                <label className="mb-2 block text-sm font-bold text-slate-700">
+                <label className="mb-2 block text-sm font-bold">
                   Password
                 </label>
   
@@ -325,22 +325,22 @@ import {
                     )
                   }
                   placeholder="••••••••"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-blue-500 focus:bg-white"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
                 />
               </div>
   
               <button
                 type="submit"
                 disabled={loading}
-                className="mt-7 w-full rounded-xl bg-slate-950 px-5 py-3.5 font-semibold text-white transition hover:bg-blue-600 disabled:bg-slate-400"
+                className="mt-7 w-full rounded-xl bg-slate-950 px-5 py-3.5 font-semibold text-white hover:bg-blue-600"
               >
                 {loading
-                  ? "Signing in..."
+                  ? "Signing In..."
                   : `Sign In as ${
                       role ===
-                      "buyer"
-                        ? "Buyer"
-                        : "Seller"
+                      "seller"
+                        ? "Seller"
+                        : "Buyer"
                     }`}
               </button>
   
@@ -349,7 +349,11 @@ import {
                 account?{" "}
   
                 <Link
-                  to="/register"
+                  to={
+                    forcedRole
+                      ? `/register?role=${forcedRole}`
+                      : "/register"
+                  }
                   className="font-bold text-blue-600"
                 >
                   Register

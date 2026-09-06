@@ -1,31 +1,33 @@
 import {
+  AlertCircle,
+  ArrowRight,
+  BadgeCheck,
+  Building2,
+  ChevronDown,
+  LogOut,
+  MessageCircle,
+  Mic,
+  Paperclip,
+  Save,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Upload,
+  User,
+  X,
+} from "lucide-react";
+
+import {
   useEffect,
   useState,
   type ReactNode,
 } from "react";
 
 import {
-  AlertCircle,
-  ArrowRight,
-  CheckCircle2,
-  ChevronDown,
-  LogOut,
-  MessageCircle,
-  Save,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  User,
-  X,
-} from "lucide-react";
-
-import {
   Link,
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-
-import AiInput from "../components/chat/AiInput";
 
 import FastVerificationModal from "../components/auth/FastVerificationModal";
 
@@ -48,20 +50,26 @@ import type {
   UserRole,
 } from "../types/marketplace";
 
-import type { User as AuthUser } from "../types/auth";
-
-// =====================================================
-// HOME
-// =====================================================
-
 export default function Home() {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
 
-  const [searchParams] =
-    useSearchParams();
+  const [
+    searchParams,
+  ] = useSearchParams();
 
-  const [role, setRole] =
-    useState<UserRole>("buyer");
+  const [
+    role,
+    setRole,
+  ] =
+    useState<UserRole>(
+      "buyer"
+    );
+
+  const [
+    input,
+    setInput,
+  ] = useState("");
 
   const [
     requirement,
@@ -84,7 +92,7 @@ export default function Home() {
   const [
     currentUser,
     setCurrentUser,
-  ] = useState<AuthUser | null>(() =>
+  ] = useState(
     getCurrentUser()
   );
 
@@ -99,51 +107,93 @@ export default function Home() {
   ] = useState("");
 
   // =====================================================
-  // RESUME REQUIREMENT AFTER LOGIN / REGISTER
+  // RESUME REQUIREMENT AFTER BUYER LOGIN
   // =====================================================
 
   useEffect(() => {
-    const user = getCurrentUser();
-
-    setCurrentUser(user);
-
     const shouldResume =
       searchParams.get(
         "resumeRequirement"
-      ) === "true";
+      );
 
-    if (!user || !shouldResume) {
+    if (
+      shouldResume !== "true"
+    ) {
       return;
     }
 
-    const pendingRequirement =
+    const user =
+      getCurrentUser();
+
+    const pending =
       getPendingRequirement();
 
-    if (!pendingRequirement) {
-      navigate("/", {
-        replace: true,
-      });
+    if (
+      !user ||
+      user.role !== "buyer" ||
+      !pending
+    ) {
+      navigate(
+        "/",
+        {
+          replace: true,
+        }
+      );
 
       return;
     }
 
+    setCurrentUser(user);
     setRole("buyer");
+    setRequirement(pending);
 
-    setRequirement(
-      pendingRequirement
+    navigate(
+      "/",
+      {
+        replace: true,
+      }
     );
 
-    setShowRequirementModal(false);
+    // Already phone verified
+    if (
+      user.phoneVerified
+    ) {
+      saveBuyerRequirement(
+        pending,
+        user,
+        "ai_verification_pending"
+      );
 
-    setShowFastVerification(true);
+      clearPendingRequirement();
 
-    navigate("/", {
-      replace: true,
-    });
-  }, [navigate, searchParams]);
+      setRequirement(null);
+
+      navigate(
+        "/profile",
+        {
+          replace: true,
+
+          state: {
+            message:
+              "Your requirement has been saved successfully.",
+          },
+        }
+      );
+
+      return;
+    }
+
+    // Need OTP
+    setShowFastVerification(
+      true
+    );
+  }, [
+    searchParams,
+    navigate,
+  ]);
 
   // =====================================================
-  // SUCCESS MESSAGE TIMER
+  // SUCCESS AUTO CLOSE
   // =====================================================
 
   useEffect(() => {
@@ -151,453 +201,91 @@ export default function Home() {
       return;
     }
 
-    const timer = window.setTimeout(
-      () => {
-        setSuccessMessage("");
-      },
-      4500
-    );
+    const timer =
+      window.setTimeout(
+        () => {
+          setSuccessMessage("");
+        },
+        3000
+      );
 
     return () =>
-      window.clearTimeout(timer);
+      window.clearTimeout(
+        timer
+      );
   }, [successMessage]);
 
   // =====================================================
-  // MOCK AI - GENERATE REQUIREMENT
+  // GENERATE
   // =====================================================
 
-  const handleSend = (
-    text: string
-  ) => {
-    const cleanText = text.trim();
+  const handleGenerate =
+    () => {
+      if (
+        !input.trim()
+      ) {
+        alert(
+          "Apni requirement enter karein."
+        );
 
-    if (!cleanText) {
-      return;
-    }
+        return;
+      }
 
-    const lower =
-      cleanText.toLowerCase();
+      if (
+        role === "seller"
+      ) {
+        alert(
+          "Seller listing generation next phase mein connect hogi. Filhal Find page par demo Seller Listings available hain."
+        );
 
-    // -----------------------------------------
-    // SELLER FLOW
-    // -----------------------------------------
+        return;
+      }
 
-    if (role === "seller") {
-      alert(
-        "Seller listing generation next flow mein connect hogi. Filhal buyer requirement flow complete hai."
-      );
-
-      return;
-    }
-
-    // -----------------------------------------
-    // LAPTOP MOCK
-    // -----------------------------------------
-
-    if (
-      lower.includes("laptop") ||
-      lower.includes("dell") ||
-      lower.includes("i7") ||
-      lower.includes("16gb") ||
-      lower.includes("16 gb")
-    ) {
-      const generatedRequirement: StructuredRequirement =
-        {
-          category: "Electronics",
-
-          subCategory: "Laptop",
-
-          title:
-            "Dell Laptop Required",
-
-          fields: [
-            {
-              id: "brand",
-              label: "Brand",
-
-              value:
-                lower.includes(
-                  "dell"
-                )
-                  ? "Dell"
-                  : "",
-
-              required: true,
-            },
-
-            {
-              id: "model",
-              label: "Model",
-              value: "",
-              required: false,
-            },
-
-            {
-              id: "processor",
-              label: "Processor",
-
-              value:
-                lower.includes("i7")
-                  ? "Intel Core i7"
-                  : "",
-
-              required: true,
-            },
-
-            {
-              id: "ram",
-              label: "RAM",
-
-              value:
-                lower.includes(
-                  "16gb"
-                ) ||
-                lower.includes(
-                  "16 gb"
-                )
-                  ? "16 GB"
-                  : "",
-
-              required: true,
-            },
-
-            {
-              id: "storage",
-              label: "Storage",
-
-              value:
-                lower.includes("512")
-                  ? "512 GB SSD"
-                  : "",
-
-              required: true,
-            },
-
-            {
-              id: "condition",
-              label: "Condition",
-
-              value:
-                lower.includes(
-                  "used"
-                )
-                  ? "Used"
-                  : lower.includes(
-                        "new"
-                      )
-                    ? "New"
-                    : "",
-
-              required: true,
-            },
-
-            {
-              id: "budget",
-              label:
-                "Budget Range",
-
-              value:
-                lower.includes(
-                  "150k"
-                ) ||
-                lower.includes(
-                  "150000"
-                )
-                  ? "Up to PKR 150,000"
-                  : "",
-
-              required: true,
-            },
-
-            {
-              id: "location",
-              label: "Location",
-
-              value:
-                lower.includes(
-                  "karachi"
-                )
-                  ? "Karachi"
-                  : lower.includes(
-                        "lahore"
-                      )
-                    ? "Lahore"
-                    : lower.includes(
-                          "islamabad"
-                        )
-                      ? "Islamabad"
-                      : "",
-
-              required: true,
-            },
-
-            {
-              id: "area",
-              label: "Area",
-
-              value:
-                lower.includes(
-                  "gulshan"
-                )
-                  ? "Gulshan-e-Iqbal"
-                  : "",
-
-              required: false,
-            },
-
-            {
-              id: "warranty",
-              label: "Warranty",
-              value: "",
-              required: false,
-            },
-          ],
-        };
+      const generated =
+        generateMockRequirement(
+          input
+        );
 
       setRequirement(
-        generatedRequirement
+        generated
       );
 
       setShowRequirementModal(
         true
       );
-
-      return;
-    }
-
-    // -----------------------------------------
-    // CAR MOCK
-    // -----------------------------------------
-
-    if (
-      lower.includes("car") ||
-      lower.includes(
-        "corolla"
-      ) ||
-      lower.includes(
-        "civic"
-      ) ||
-      lower.includes(
-        "vehicle"
-      )
-    ) {
-      const carRequirement: StructuredRequirement =
-        {
-          category: "Vehicles",
-
-          subCategory: "Cars",
-
-          title:
-            lower.includes(
-              "corolla"
-            )
-              ? "Toyota Corolla Required"
-              : "Car Required",
-
-          fields: [
-            {
-              id: "make",
-              label: "Make",
-
-              value:
-                lower.includes(
-                  "toyota"
-                ) ||
-                lower.includes(
-                  "corolla"
-                )
-                  ? "Toyota"
-                  : "",
-
-              required: true,
-            },
-
-            {
-              id: "model",
-              label: "Model",
-
-              value:
-                lower.includes(
-                  "corolla"
-                )
-                  ? "Corolla"
-                  : lower.includes(
-                        "civic"
-                      )
-                    ? "Civic"
-                    : "",
-
-              required: true,
-            },
-
-            {
-              id: "year",
-              label: "Model Year",
-              value: "",
-              required: true,
-            },
-
-            {
-              id: "variant",
-              label: "Variant",
-              value: "",
-              required: false,
-            },
-
-            {
-              id: "transmission",
-              label:
-                "Transmission",
-
-              value:
-                lower.includes(
-                  "automatic"
-                )
-                  ? "Automatic"
-                  : lower.includes(
-                        "manual"
-                      )
-                    ? "Manual"
-                    : "",
-
-              required: false,
-            },
-
-            {
-              id: "condition",
-              label: "Condition",
-
-              value:
-                lower.includes(
-                  "used"
-                )
-                  ? "Used"
-                  : "",
-
-              required: true,
-            },
-
-            {
-              id: "budget",
-              label:
-                "Budget Range",
-              value: "",
-              required: true,
-            },
-
-            {
-              id: "location",
-              label: "Location",
-
-              value:
-                lower.includes(
-                  "karachi"
-                )
-                  ? "Karachi"
-                  : lower.includes(
-                        "lahore"
-                      )
-                    ? "Lahore"
-                    : "",
-
-              required: true,
-            },
-          ],
-        };
-
-      setRequirement(
-        carRequirement
-      );
-
-      setShowRequirementModal(
-        true
-      );
-
-      return;
-    }
-
-    // -----------------------------------------
-    // GENERIC DYNAMIC FALLBACK
-    // -----------------------------------------
-
-    const genericRequirement: StructuredRequirement =
-      {
-        category: "Other",
-
-        title:
-          "New Buyer Requirement",
-
-        fields: [
-          {
-            id: "product",
-            label: "Product",
-
-            value: cleanText,
-
-            required: true,
-          },
-
-          {
-            id: "condition",
-            label: "Condition",
-            value: "",
-            required: false,
-          },
-
-          {
-            id: "budget",
-            label:
-              "Budget Range",
-            value: "",
-            required: true,
-          },
-
-          {
-            id: "location",
-            label: "Location",
-            value: "",
-            required: true,
-          },
-        ],
-      };
-
-    setRequirement(
-      genericRequirement
-    );
-
-    setShowRequirementModal(
-      true
-    );
-  };
+    };
 
   // =====================================================
-  // UPDATE FIELD
+  // FIELD UPDATE
   // =====================================================
 
-  const handleFieldChange = (
+  const updateRequirementField = (
     fieldId: string,
     value: string
   ) => {
-    if (!requirement) {
-      return;
-    }
+    setRequirement(
+      (current) => {
+        if (!current) {
+          return current;
+        }
 
-    const updatedFields =
-      requirement.fields.map(
-        (field) =>
-          field.id === fieldId
-            ? {
-                ...field,
-                value,
-              }
-            : field
-      );
+        return {
+          ...current,
 
-    setRequirement({
-      ...requirement,
-
-      fields: updatedFields,
-    });
+          fields:
+            current.fields.map(
+              (field) =>
+                field.id ===
+                fieldId
+                  ? {
+                      ...field,
+                      value,
+                    }
+                  : field
+            ),
+        };
+      }
+    );
   };
 
   // =====================================================
@@ -611,22 +299,17 @@ export default function Home() {
       }
 
       const missingRequired =
-        requirement.fields.filter(
+        requirement.fields.some(
           (field) =>
             field.required &&
             !field.value.trim()
         );
 
       if (
-        missingRequired.length > 0
+        missingRequired
       ) {
         alert(
-          `Please complete: ${missingRequired
-            .map(
-              (field) =>
-                field.label
-            )
-            .join(", ")}`
+          "Please complete all required fields."
         );
 
         return;
@@ -635,9 +318,9 @@ export default function Home() {
       const user =
         getCurrentUser();
 
-      // -----------------------------------------
+      // -----------------------------------------------
       // NOT LOGGED IN
-      // -----------------------------------------
+      // -----------------------------------------------
 
       if (!user) {
         savePendingRequirement(
@@ -648,20 +331,72 @@ export default function Home() {
           false
         );
 
-        navigate("/login");
+        navigate(
+          `/login?role=buyer&returnUrl=${encodeURIComponent(
+            "/"
+          )}`
+        );
 
         return;
       }
 
-      // -----------------------------------------
-      // LOGGED IN
-      // -----------------------------------------
+      // -----------------------------------------------
+      // SELLER LOGGED IN
+      // -----------------------------------------------
 
-      setCurrentUser(user);
+      if (
+        user.role !==
+        "buyer"
+      ) {
+        alert(
+          "Requirement save karne ke liye Buyer account required hai."
+        );
+
+        return;
+      }
+
+      // Always preserve before verification
+      savePendingRequirement(
+        requirement
+      );
 
       setShowRequirementModal(
         false
       );
+
+      // -----------------------------------------------
+      // PHONE ALREADY VERIFIED
+      // -----------------------------------------------
+
+      if (
+        user.phoneVerified
+      ) {
+        saveBuyerRequirement(
+          requirement,
+          user,
+          "ai_verification_pending"
+        );
+
+        clearPendingRequirement();
+
+        setRequirement(null);
+
+        navigate(
+          "/profile",
+          {
+            state: {
+              message:
+                "Your requirement has been saved successfully.",
+            },
+          }
+        );
+
+        return;
+      }
+
+      // -----------------------------------------------
+      // NEED OTP
+      // -----------------------------------------------
 
       setShowFastVerification(
         true
@@ -674,25 +409,47 @@ export default function Home() {
 
   const handlePhoneVerified =
     () => {
-      if (!requirement) {
+      const loggedInUser =
+        getCurrentUser();
+
+      if (!loggedInUser) {
+        alert(
+          "Login session not found."
+        );
+
+        return;
+      }
+
+      const pending =
+        getPendingRequirement();
+
+      if (!pending) {
+        setShowFastVerification(
+          false
+        );
+
+        alert(
+          "Pending requirement not found."
+        );
+
         return;
       }
 
       const verifiedUser =
-        markPhoneVerified();
-
-      if (!verifiedUser) {
-        savePendingRequirement(
-          requirement
+        markPhoneVerified(
+          loggedInUser.id
         );
 
-        navigate("/login");
+      if (!verifiedUser) {
+        alert(
+          "Phone verification failed."
+        );
 
         return;
       }
 
       saveBuyerRequirement(
-        requirement,
+        pending,
         verifiedUser,
         "ai_verification_pending"
       );
@@ -703,275 +460,139 @@ export default function Home() {
         verifiedUser
       );
 
-      setShowFastVerification(
-        false
-      );
+      setRequirement(null);
 
       setShowRequirementModal(
         false
       );
 
-      setRequirement(null);
+      setShowFastVerification(
+        false
+      );
 
-      setSuccessMessage(
-        "Requirement submitted successfully. AI verification pending."
+      navigate(
+        "/profile",
+        {
+          replace: true,
+
+          state: {
+            message:
+              "Your requirement has been saved successfully.",
+          },
+        }
       );
     };
-
-  // =====================================================
-  // ROLE
-  // =====================================================
-
-  const handleRoleChange = (
-    newRole: UserRole
-  ) => {
-    setRole(newRole);
-
-    setRequirement(null);
-
-    setShowRequirementModal(
-      false
-    );
-
-    setShowFastVerification(
-      false
-    );
-  };
 
   // =====================================================
   // LOGOUT
   // =====================================================
 
-  const handleLogout = () => {
-    logoutUser();
+  const handleLogout =
+    () => {
+      logoutUser();
 
-    setCurrentUser(null);
+      setCurrentUser(null);
 
-    setProfileMenuOpen(false);
+      setProfileMenuOpen(
+        false
+      );
 
-    setSuccessMessage(
-      "You have been signed out."
-    );
-  };
-
-  // =====================================================
-  // UI
-  // =====================================================
+      navigate("/");
+    };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-950">
-      {/* =================================================
+    <div className="min-h-screen bg-white text-slate-950">
+      {/* =====================================================
           HEADER
-      ================================================= */}
+      ===================================================== */}
 
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div
-          className="
-            mx-auto
-            flex
-            max-w-7xl
-            items-center
-            justify-between
-            px-6
-            py-4
-          "
-        >
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          {/* LOGO */}
+
           <Link
             to="/"
-            className="flex items-center gap-3"
+            className="flex items-center gap-2"
           >
-            <div
-              className="
-                flex
-                h-10
-                w-10
-                items-center
-                justify-center
-                rounded-xl
-                bg-slate-950
-                text-white
-              "
-            >
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-white">
               <Sparkles
-                size={19}
+                size={17}
               />
             </div>
 
-            <div className="text-xl font-bold">
+            <span className="text-xl font-black">
               Khoj
               <span className="text-blue-600">
                 Market
               </span>
-            </div>
+            </span>
           </Link>
 
-          <nav className="hidden items-center gap-8 md:flex">
+          {/* NAV */}
+
+          <nav className="hidden items-center gap-7 md:flex">
             <Link
               to="/find"
-              className="text-sm font-medium text-slate-600 hover:text-blue-600"
+              className="text-sm font-semibold text-slate-600 transition hover:text-blue-600"
             >
               Find
             </Link>
 
             <a
               href="#how-it-works"
-              className="text-sm font-medium text-slate-600 hover:text-blue-600"
+              className="text-sm font-semibold text-slate-600 transition hover:text-blue-600"
             >
               How It Works
             </a>
           </nav>
 
-          {/* AUTH */}
+          {/* USER */}
 
-          {!currentUser ? (
-            <Link
-              to="/login"
-              className="
-                rounded-xl
-                border
-                border-slate-200
-                px-5
-                py-2.5
-                text-sm
-                font-semibold
-                text-slate-700
-                transition
-                hover:border-blue-200
-                hover:text-blue-600
-              "
-            >
-              Sign In
-            </Link>
-          ) : (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() =>
-                  setProfileMenuOpen(
-                    (value) =>
-                      !value
-                  )
-                }
-                className="
-                  flex
-                  items-center
-                  gap-3
-                  rounded-xl
-                  border
-                  border-slate-200
-                  bg-white
-                  px-3
-                  py-2
-                  transition
-                  hover:border-blue-200
-                  hover:shadow-sm
-                "
+          <div className="relative">
+            {!currentUser ? (
+              <Link
+                to="/login"
+                className="rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-600"
               >
-                <div
-                  className="
-                    flex
-                    h-9
-                    w-9
-                    items-center
-                    justify-center
-                    rounded-full
-                    bg-slate-950
-                    text-sm
-                    font-black
-                    text-white
-                  "
+                Sign In
+              </Link>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setProfileMenuOpen(
+                      (value) =>
+                        !value
+                    )
+                  }
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50"
                 >
-                  {currentUser.name
-                    .charAt(0)
-                    .toUpperCase()}
-                </div>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                    <User
+                      size={16}
+                    />
+                  </div>
 
-                <div className="hidden text-left sm:block">
-                  <p className="max-w-[130px] truncate text-sm font-bold">
+                  <span className="hidden text-sm font-bold sm:block">
                     {
                       currentUser.name
                     }
-                  </p>
+                  </span>
 
-                  <p className="text-[11px] capitalize text-slate-400">
-                    {
-                      currentUser.role
-                    }
-                    {currentUser.phoneVerified
-                      ? " • Verified"
-                      : ""}
-                  </p>
-                </div>
+                  <ChevronDown
+                    size={15}
+                  />
+                </button>
 
-                <ChevronDown
-                  size={16}
-                  className="text-slate-400"
-                />
-              </button>
-
-              {profileMenuOpen && (
-                <div
-                  className="
-                    absolute
-                    right-0
-                    top-[calc(100%+10px)]
-                    w-64
-                    overflow-hidden
-                    rounded-2xl
-                    border
-                    border-slate-200
-                    bg-white
-                    shadow-xl
-                  "
-                >
-                  <div className="border-b border-slate-100 p-4">
-                    <p className="font-bold text-slate-900">
-                      {
-                        currentUser.name
-                      }
-                    </p>
-
-                    <p className="mt-1 truncate text-xs text-slate-400">
-                      {
-                        currentUser.email
-                      }
-                    </p>
-
-                    {currentUser.phoneVerified && (
-                      <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-                        <CheckCircle2
-                          size={13}
-                        />
-
-                        Phone Verified
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-2">
+                {profileMenuOpen && (
+                  <div className="absolute right-0 top-12 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
                     <Link
                       to="/profile"
-                      onClick={() =>
-                        setProfileMenuOpen(
-                          false
-                        )
-                      }
-                      className="
-                        flex
-                        items-center
-                        gap-3
-                        rounded-xl
-                        px-3
-                        py-2.5
-                        text-sm
-                        font-semibold
-                        text-slate-600
-                        hover:bg-slate-50
-                        hover:text-blue-600
-                      "
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
                     >
                       <User
-                        size={17}
+                        size={16}
                       />
 
                       My Profile
@@ -982,521 +603,314 @@ export default function Home() {
                       onClick={
                         handleLogout
                       }
-                      className="
-                        flex
-                        w-full
-                        items-center
-                        gap-3
-                        rounded-xl
-                        px-3
-                        py-2.5
-                        text-left
-                        text-sm
-                        font-semibold
-                        text-red-500
-                        hover:bg-red-50
-                      "
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-500 hover:bg-red-50"
                     >
                       <LogOut
-                        size={17}
+                        size={16}
                       />
 
                       Sign Out
                     </button>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </>
+            )}
+          </div>
         </div>
       </header>
 
-      <main>
-        {/* =================================================
-            HERO
-        ================================================= */}
+      {/* =====================================================
+          HERO
+      ===================================================== */}
 
-        <section
-          id="find"
-          className="
-            mx-auto
-            max-w-7xl
-            px-6
-            pb-24
-            pt-16
-          "
-        >
-          <div className="mb-10 text-center">
-            <div
-              className="
-                mb-6
-                inline-flex
-                items-center
-                gap-2
-                rounded-full
-                border
-                border-blue-200
-                bg-white
-                px-4
-                py-2
-                text-xs
-                font-semibold
-                text-blue-600
-                shadow-sm
-              "
+      <section className="relative overflow-hidden bg-slate-50">
+        <div className="mx-auto max-w-5xl px-6 py-20 text-center sm:py-28">
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-600">
+            <Sparkles
+              size={14}
+            />
+
+            AI-POWERED LOCAL MARKETPLACE
+          </div>
+
+          <h1 className="mx-auto mt-6 max-w-4xl text-4xl font-black tracking-tight sm:text-6xl">
+          What are you looking for?
+          </h1>
+
+          <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-500">
+            Type, speak ya image
+            upload karein. KhojMarket
+            aapki requirement ko
+            structured request mein
+            convert karega.
+          </p>
+
+          {/* ROLE SWITCH */}
+
+          <div className="mx-auto mt-9 inline-flex rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm">
+            <button
+              type="button"
+              onClick={() =>
+                setRole(
+                  "buyer"
+                )
+              }
+              className={`rounded-xl px-6 py-3 text-sm font-bold transition ${
+                role === "buyer"
+                  ? "bg-slate-950 text-white"
+                  : "text-slate-500"
+              }`}
             >
-              <Sparkles
-                size={15}
-              />
+              I want to Buy
+            </button>
 
-              AI-powered marketplace
-              for Pakistan
-
-              <ArrowRight
-                size={14}
-              />
-            </div>
-
-            <h1
-              className="
-                mx-auto
-                max-w-4xl
-                text-5xl
-                font-black
-                tracking-tight
-                md:text-6xl
-              "
+            <button
+              type="button"
+              onClick={() =>
+                setRole(
+                  "seller"
+                )
+              }
+              className={`rounded-xl px-6 py-3 text-sm font-bold transition ${
+                role === "seller"
+                  ? "bg-slate-950 text-white"
+                  : "text-slate-500"
+              }`}
             >
-              What do you want?
-            </h1>
-
-            <p
-              className="
-                mx-auto
-                mt-5
-                max-w-2xl
-                text-lg
-                leading-8
-                text-slate-500
-              "
-            >
-              Bas apni requirement
-              batao. AI details
-              samjhega aur relevant
-              sellers identify karega.
-            </p>
-
-            {/* ROLE */}
-
-            <div
-              className="
-                mt-8
-                inline-flex
-                rounded-2xl
-                border
-                border-slate-200
-                bg-white
-                p-1.5
-                shadow-sm
-              "
-            >
-              <button
-                type="button"
-                onClick={() =>
-                  handleRoleChange(
-                    "buyer"
-                  )
-                }
-                className={`
-                  rounded-xl
-                  px-6
-                  py-3
-                  text-sm
-                  font-semibold
-                  transition
-
-                  ${
-                    role ===
-                    "buyer"
-                      ? "bg-slate-950 text-white"
-                      : "text-slate-500 hover:text-slate-950"
-                  }
-                `}
-              >
-                I want to Buy
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleRoleChange(
-                    "seller"
-                  )
-                }
-                className={`
-                  rounded-xl
-                  px-6
-                  py-3
-                  text-sm
-                  font-semibold
-                  transition
-
-                  ${
-                    role ===
-                    "seller"
-                      ? "bg-slate-950 text-white"
-                      : "text-slate-500 hover:text-slate-950"
-                  }
-                `}
-              >
-                I want to Sell
-              </button>
-            </div>
+              I want to Sell
+            </button>
           </div>
 
           {/* AI INPUT */}
 
-          <div className="mx-auto w-full max-w-6xl">
-            <AiInput
-              role={role}
-              onSend={
-                handleSend
+          <div className="mx-auto mt-7 max-w-4xl rounded-3xl border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/50">
+            <textarea
+              value={input}
+              onChange={(event) =>
+                setInput(
+                  event.target
+                    .value
+                )
               }
+              rows={4}
+              placeholder={
+                role === "buyer"
+                  ? "e.g. Mujhe Lahore mein 2021 se 2023 Toyota Corolla automatic chahiye..."
+                  : "e.g. Mere paas Samsung S25 Ultra PTA approved available hai..."
+              }
+              className="w-full resize-none border-0 bg-transparent px-3 py-3 text-lg outline-none placeholder:text-slate-400"
             />
 
-            <div
-              className="
-                mt-6
-                flex
-                flex-wrap
-                justify-center
-                gap-6
-                text-xs
-                text-slate-500
-              "
-            >
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2
-                  size={15}
-                  className="text-emerald-500"
-                />
+            <div className="mt-2 flex flex-col justify-between gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100"
+                  title="Attach"
+                >
+                  <Paperclip
+                    size={19}
+                  />
+                </button>
 
-                Verified users
-              </span>
+                <button
+                  type="button"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100"
+                  title="Upload image"
+                >
+                  <Upload
+                    size={19}
+                  />
+                </button>
 
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck
-                  size={15}
-                  className="text-blue-500"
-                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setInput(
+                      "Mujhe Dell laptop chahiye Core i7, 16GB RAM, 512GB SSD, budget 150000 aur location Lahore"
+                    )
+                  }
+                  className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100"
+                  title="Mock Voice"
+                >
+                  <Mic
+                    size={19}
+                  />
+                </button>
+              </div>
 
-                Trusted sellers
-              </span>
-
-              <span className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={
+                  handleGenerate
+                }
+                className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-bold text-white transition hover:bg-blue-700"
+              >
                 <Sparkles
-                  size={15}
-                  className="text-blue-500"
+                  size={17}
                 />
 
-                AI-powered
-              </span>
+                {role === "buyer"
+                  ? "Generate Req"
+                  : "Generate Listing"}
+              </button>
             </div>
           </div>
-        </section>
 
-        {/* =================================================
-            HOW IT WORKS
-        ================================================= */}
-
-        <section
-          id="how-it-works"
-          className="border-y border-slate-200 bg-white py-24"
-        >
-          <div className="mx-auto max-w-7xl px-6">
-            <div className="text-center">
-              <p className="text-sm font-bold uppercase tracking-widest text-blue-600">
-                Simple Process
-              </p>
-
-              <h2 className="mt-3 text-4xl font-black">
-                How it works
-              </h2>
-
-              <p className="mx-auto mt-4 max-w-2xl text-slate-500">
-                Requirement se
-                verified marketplace
-                post tak simple aur
-                trusted process.
-              </p>
-            </div>
-
-            <div className="mt-14 grid gap-6 md:grid-cols-4">
-              <HowCard
-                icon={
-                  <MessageCircle />
-                }
-                number="01"
-                title="Batao kya chahiye"
-                description="Text, voice ya image se apni requirement batao."
-              />
-
-              <HowCard
-                icon={<Sparkles />}
-                number="02"
-                title="AI requirement banaye"
-                description="AI product aur important details identify karke structured requirement banayega."
-              />
-
-              <HowCard
-                icon={
-                  <ShieldCheck />
-                }
-                number="03"
-                title="Fast Verification"
-                description="Phone OTP ke through buyer account verify hoga."
-              />
-
-              <HowCard
-                icon={<Search />}
-                number="04"
-                title="Sellers match hon"
-                description="Verification ke baad relevant sellers requirement ke against identify honge."
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* =================================================
-            TRUST
-        ================================================= */}
-
-        <section className="bg-slate-50 py-24">
-          <div className="mx-auto max-w-7xl px-6">
-            <div className="grid items-center gap-12 lg:grid-cols-2">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-widest text-blue-600">
-                  Trust & Verification
-                </p>
-
-                <h2 className="mt-3 max-w-xl text-4xl font-black leading-tight">
-                  Real requirements.
-                  Better seller
-                  opportunities.
-                </h2>
-
-                <p className="mt-5 max-w-xl leading-7 text-slate-500">
-                  KhojMarket ka goal
-                  sirf posts collect
-                  karna nahi. Buyer
-                  phone verification
-                  aur requirement
-                  verification se
-                  sellers ko better
-                  quality leads dena
-                  hai.
-                </p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <TrustCard
-                  icon={
-                    <CheckCircle2 />
-                  }
-                  title="Phone Verified"
-                  text="OTP ke through account phone verify hota hai."
-                />
-
-                <TrustCard
-                  icon={
-                    <ShieldCheck />
-                  }
-                  title="Requirement Verification"
-                  text="AI ya admin requirement authenticity confirm kar sakta hai."
-                />
-
-                <TrustCard
-                  icon={<Sparkles />}
-                  title="AI Structured"
-                  text="Different categories ke liye relevant details generate hoti hain."
-                />
-
-                <TrustCard
-                  icon={<Search />}
-                  title="Relevant Matching"
-                  text="Sellers ko relevant buyer requirements discover karne mein help milti hai."
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* =================================================
-            REVIEWS
-        ================================================= */}
-
-        <section className="border-t border-slate-200 bg-white py-24">
-          <div className="mx-auto max-w-7xl px-6 text-center">
-            <p className="text-sm font-bold uppercase tracking-widest text-blue-600">
-              Customers
-            </p>
-
-            <h2 className="mt-3 text-4xl font-black">
-              What people say
-            </h2>
-
-            <div className="mt-12 grid gap-6 md:grid-cols-3">
-              <Review
-                name="Ahmed"
-                city="Karachi"
-                text="Requirement banana bohat simple tha."
-              />
-
-              <Review
-                name="Usman"
-                city="Lahore"
-                text="Relevant sellers ek hi jagah mil gaye."
-              />
-
-              <Review
-                name="Ali"
-                city="Islamabad"
-                text="AI ne meri laptop requirement properly samajh li."
-              />
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* =================================================
-          FOOTER
-      ================================================= */}
-
-      <footer className="bg-slate-950 text-white">
-        {/* SUPPORT CTA */}
-
-        <div className="border-b border-slate-800">
-          <div
-            className="
-              mx-auto
-              flex
-              max-w-7xl
-              flex-col
-              items-center
-              justify-between
-              gap-8
-              px-6
-              py-14
-              text-center
-              md:flex-row
-              md:text-left
-            "
-          >
-            <div>
-              <p className="text-sm font-semibold text-blue-400">
-                Need Help?
-              </p>
-
-              <h2 className="mt-2 text-3xl font-bold">
-                Buying ya selling
-                mein help chahiye?
-              </h2>
-
-              <p className="mt-3 max-w-2xl text-slate-400">
-                Hamari support team
-                requirement create
-                karne, seller find
-                karne aur platform
-                use karne mein help
-                karegi.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              className="
-                flex
-                shrink-0
-                items-center
-                gap-2
-                rounded-xl
-                bg-white
-                px-6
-                py-3.5
-                font-semibold
-                text-slate-950
-                transition
-                hover:bg-blue-500
-                hover:text-white
-              "
+          <div className="mt-7">
+            <Link
+              to="/find"
+              className="inline-flex items-center gap-2 text-sm font-bold text-blue-600"
             >
-              <MessageCircle
-                size={19}
+              <Search
+                size={16}
               />
 
-              Chat on WhatsApp
-            </button>
+              Browse Marketplace
+
+              <ArrowRight
+                size={15}
+              />
+            </Link>
           </div>
         </div>
+      </section>
 
-        {/* MAIN FOOTER */}
+      {/* =====================================================
+          HOW IT WORKS
+      ===================================================== */}
 
-        <div className="mx-auto max-w-7xl px-6 py-16">
-          <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-5">
-            {/* BRAND */}
+      <section
+        id="how-it-works"
+        className="bg-white py-20"
+      >
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="text-center">
+            <p className="text-sm font-bold text-blue-600">
+              HOW IT WORKS
+            </p>
 
-            <div className="sm:col-span-2 lg:col-span-2">
-              <div className="flex items-center gap-3">
-                <div
-                  className="
-                    flex
-                    h-11
-                    w-11
-                    items-center
-                    justify-center
-                    rounded-xl
-                    bg-white
-                    text-slate-950
-                  "
-                >
-                  <Sparkles
-                    size={20}
-                  />
-                </div>
+            <h2 className="mt-3 text-3xl font-black sm:text-4xl">
+              From requirement to
+              trusted connection
+            </h2>
+          </div>
 
-                <div className="text-2xl font-bold">
-                  Khoj
-                  <span className="text-blue-500">
-                    Market
-                  </span>
-                </div>
-              </div>
+          <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+            <HowCard
+              number="01"
+              icon={
+                <MessageCircle />
+              }
+              title="Tell us what you need"
+              text="Text, voice ya image se apni requirement explain karein."
+            />
 
-              <p className="mt-5 max-w-md leading-7 text-slate-400">
-                Pakistan ka
-                AI-powered
-                buyer-supplier
-                marketplace. Bas
-                apni requirement
-                batao, AI usay
-                structure karega aur
-                relevant sellers tak
-                pohanchne mein help
-                karega.
+            <HowCard
+              number="02"
+              icon={
+                <Sparkles />
+              }
+              title="AI structures it"
+              text="KhojMarket important fields extract karke request ready karta hai."
+            />
+
+            <HowCard
+              number="03"
+              icon={
+                <ShieldCheck />
+              }
+              title="Fast Verification"
+              text="Phone aur requirement verification trust improve karti hai."
+            />
+
+            <HowCard
+              number="04"
+              icon={
+                <Building2 />
+              }
+              title="Connect with sellers"
+              text="Verified sellers relevant requirements par inquiry bhejte hain."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* =====================================================
+          TRUST
+      ===================================================== */}
+
+      <section className="bg-slate-950 py-20 text-white">
+        <div className="mx-auto grid max-w-7xl gap-10 px-6 lg:grid-cols-2 lg:items-center">
+          <div>
+            <p className="text-sm font-bold text-blue-400">
+              TRUST FIRST
+            </p>
+
+            <h2 className="mt-3 text-3xl font-black sm:text-4xl">
+              Better leads. Better
+              sellers. Less noise.
+            </h2>
+
+            <p className="mt-5 max-w-xl leading-7 text-slate-400">
+              KhojMarket ka goal sirf
+              listings show karna nahi,
+              balkay trusted buyers aur
+              sellers ko relevant need
+              ke around connect karna
+              hai.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TrustItem
+              title="Verified Requirements"
+              text="Buyer post verification state clearly visible."
+            />
+
+            <TrustItem
+              title="Verified Sellers"
+              text="Seller verification before paid inquiries."
+            />
+
+            <TrustItem
+              title="Protected Contact"
+              text="Contact information blindly public nahi hoti."
+            />
+
+            <TrustItem
+              title="Transparent Credits"
+              text="Seller inquiry cost aur transaction history visible."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* =====================================================
+          FOOTER
+      ===================================================== */}
+
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto max-w-7xl px-6 py-14">
+          <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="text-xl font-black">
+                Khoj
+                <span className="text-blue-600">
+                  Market
+                </span>
               </p>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <FooterTag text="AI Powered" />
-
-                <FooterTag text="Verified Users" />
-
-                <FooterTag text="Pakistan" />
-              </div>
+              <p className="mt-4 max-w-sm text-sm leading-6 text-slate-500">
+                Pakistan-focused trusted
+                buyer and seller sourcing
+                marketplace.
+              </p>
             </div>
 
             <FooterColumn
               title="Product"
-              links={[
+              items={[
                 "Find",
                 "Buyer Requirements",
                 "Seller Listings",
@@ -1505,115 +919,38 @@ export default function Home() {
             />
 
             <FooterColumn
-              title="Support"
-              links={[
-                "Help Center",
-                "WhatsApp Support",
-                "Contact Us",
-                "FAQs",
+              title="Trust"
+              items={[
+                "Buyer Verification",
+                "Seller Verification",
+                "Safe Contact",
+                "Support",
               ]}
             />
 
             <FooterColumn
-              title="Trust & Safety"
-              links={[
-                "User Verification",
-                "Privacy Policy",
-                "Terms & Conditions",
-                "Report an Issue",
+              title="Contact"
+              items={[
+                "WhatsApp Support",
+                "support@khojmarket.pk",
+                "Pakistan",
               ]}
             />
           </div>
 
-          {/* CONTACT */}
-
-          <div
-            className="
-              mt-14
-              grid
-              gap-4
-              rounded-2xl
-              border
-              border-slate-800
-              bg-slate-900/60
-              p-5
-              md:grid-cols-3
-            "
-          >
-            <FooterContact
-              title="WhatsApp"
-              value="+92 3XX XXXXXXX"
-            />
-
-            <FooterContact
-              title="Email"
-              value="support@khojmarket.pk"
-            />
-
-            <FooterContact
-              title="Location"
-              value="Pakistan"
-            />
-          </div>
-        </div>
-
-        {/* BOTTOM */}
-
-        <div className="border-t border-slate-800">
-          <div
-            className="
-              mx-auto
-              flex
-              max-w-7xl
-              flex-col
-              items-center
-              justify-between
-              gap-4
-              px-6
-              py-6
-              text-center
-              text-sm
-              text-slate-500
-              md:flex-row
-            "
-          >
-            <p>
-              © 2026 KhojMarket.
-              All rights reserved.
-            </p>
-
-            <div className="flex flex-wrap justify-center gap-5">
-              <button
-                type="button"
-                className="transition hover:text-white"
-              >
-                Privacy
-              </button>
-
-              <button
-                type="button"
-                className="transition hover:text-white"
-              >
-                Terms
-              </button>
-
-              <button
-                type="button"
-                className="transition hover:text-white"
-              >
-                Cookies
-              </button>
-            </div>
+          <div className="mt-12 border-t border-slate-200 pt-6 text-sm text-slate-400">
+            © 2026 KhojMarket. Demo
+            marketplace.
           </div>
         </div>
       </footer>
 
-      {/* =================================================
+      {/* =====================================================
           REQUIREMENT MODAL
-      ================================================= */}
+      ===================================================== */}
 
-      {showRequirementModal &&
-        requirement && (
+      {requirement &&
+        showRequirementModal && (
           <RequirementModal
             requirement={
               requirement
@@ -1624,10 +961,7 @@ export default function Home() {
               )
             }
             onFieldChange={
-              handleFieldChange
-            }
-            onRequirementChange={
-              setRequirement
+              updateRequirementField
             }
             onSave={
               handleSaveRequirement
@@ -1635,16 +969,17 @@ export default function Home() {
           />
         )}
 
-      {/* =================================================
-          OTP / FAST VERIFICATION
-      ================================================= */}
+      {/* =====================================================
+          OTP
+      ===================================================== */}
 
       <FastVerificationModal
         open={
           showFastVerification
         }
         phone={
-          currentUser?.phone || ""
+          getCurrentUser()
+            ?.phone ?? ""
         }
         onClose={() =>
           setShowFastVerification(
@@ -1656,49 +991,11 @@ export default function Home() {
         }
       />
 
-      {/* =================================================
-          SUCCESS TOAST
-      ================================================= */}
+      {/* SUCCESS */}
 
       {successMessage && (
-        <div
-          className="
-            fixed
-            bottom-6
-            right-6
-            z-[80]
-            flex
-            max-w-sm
-            items-start
-            gap-3
-            rounded-2xl
-            bg-emerald-600
-            px-5
-            py-4
-            text-sm
-            font-semibold
-            text-white
-            shadow-2xl
-          "
-        >
-          <CheckCircle2
-            size={19}
-            className="mt-0.5 shrink-0"
-          />
-
-          <span>
-            {successMessage}
-          </span>
-
-          <button
-            type="button"
-            onClick={() =>
-              setSuccessMessage("")
-            }
-            className="ml-2 text-white/70 hover:text-white"
-          >
-            <X size={16} />
-          </button>
+        <div className="fixed bottom-6 right-6 z-[150] max-w-sm rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-semibold text-white shadow-2xl">
+          {successMessage}
         </div>
       )}
     </div>
@@ -1709,8 +1006,14 @@ export default function Home() {
 // REQUIREMENT MODAL
 // =====================================================
 
-interface RequirementModalProps {
-  requirement: StructuredRequirement;
+function RequirementModal({
+  requirement,
+  onClose,
+  onFieldChange,
+  onSave,
+}: {
+  requirement:
+    StructuredRequirement;
 
   onClose: () => void;
 
@@ -1719,397 +1022,138 @@ interface RequirementModalProps {
     value: string
   ) => void;
 
-  onRequirementChange: (
-    requirement: StructuredRequirement
-  ) => void;
-
   onSave: () => void;
-}
-
-function RequirementModal({
-  requirement,
-  onClose,
-  onFieldChange,
-  onRequirementChange,
-  onSave,
-}: RequirementModalProps) {
-  const missingRequired =
+}) {
+  const missingCount =
     requirement.fields.filter(
       (field) =>
         field.required &&
         !field.value.trim()
-    );
+    ).length;
 
   return (
-    <div
-      className="
-        fixed
-        inset-0
-        z-50
-        flex
-        items-center
-        justify-center
-        bg-slate-950/55
-        p-4
-        backdrop-blur-sm
-      "
-    >
-      <div
-        className="
-          max-h-[90vh]
-          w-full
-          max-w-3xl
-          overflow-y-auto
-          rounded-3xl
-          bg-white
-          shadow-2xl
-        "
-      >
-        {/* HEADER */}
-
-        <div
-          className="
-            sticky
-            top-0
-            z-10
-            flex
-            items-start
-            justify-between
-            border-b
-            border-slate-200
-            bg-white
-            px-7
-            py-6
-          "
-        >
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-slate-100 p-7">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
-              AI Generated
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-600">
+              AI GENERATED
             </p>
 
-            <h2 className="mt-1 text-2xl font-black">
-              Review Your
-              Requirement
+            <h2 className="mt-2 text-2xl font-black">
+              Review Requirement
             </h2>
 
             <p className="mt-2 text-sm text-slate-500">
-              AI ne ye details
-              identify ki hain.
-              Missing information
-              complete karke save
-              karein.
+              Save se pehle details
+              check aur edit karein.
             </p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="
-              flex
-              h-10
-              w-10
-              items-center
-              justify-center
-              rounded-full
-              hover:bg-slate-100
-            "
+            className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* CONTENT */}
-
         <div className="p-7">
-          <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-            <div className="flex items-start gap-3">
-              <Sparkles
-                size={18}
-                className="mt-0.5 shrink-0 text-blue-600"
-              />
+          <div className="rounded-2xl bg-slate-50 p-5">
+            <p className="text-xs font-bold uppercase text-slate-400">
+              Title
+            </p>
 
-              <div>
-                <p className="text-sm font-bold text-slate-900">
-                  AI generated
-                  requirement
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Details verify
-                  karna buyer ki
-                  responsibility
-                  hogi. Save ke baad
-                  phone verification
-                  hogi.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* CATEGORY */}
-
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
-                Category
-              </label>
-
-              <input
-                value={
-                  requirement.category
-                }
-                onChange={(event) =>
-                  onRequirementChange({
-                    ...requirement,
-
-                    category:
-                      event.target
-                        .value,
-                  })
-                }
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
-                Sub Category
-              </label>
-
-              <input
-                value={
-                  requirement.subCategory ||
-                  ""
-                }
-                onChange={(event) =>
-                  onRequirementChange({
-                    ...requirement,
-
-                    subCategory:
-                      event.target
-                        .value,
-                  })
-                }
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* TITLE */}
-
-          <div className="mt-5">
-            <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
-              Requirement Title
-            </label>
-
-            <input
-              value={
+            <h3 className="mt-2 text-xl font-black">
+              {
                 requirement.title
               }
-              onChange={(event) =>
-                onRequirementChange({
-                  ...requirement,
+            </h3>
 
-                  title:
-                    event.target
-                      .value,
-                })
+            <p className="mt-2 text-sm text-slate-500">
+              {
+                requirement.category
               }
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
-            />
+
+              {requirement.subCategory
+                ? ` • ${requirement.subCategory}`
+                : ""}
+            </p>
           </div>
 
-          {/* DYNAMIC FIELDS */}
-
-          <div className="mt-7">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold">
-                  Requirement
-                  Details
-                </h3>
-
-                <p className="mt-1 text-xs text-slate-400">
-                  Category ke
-                  according dynamic
-                  fields.
-                </p>
-              </div>
-
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                {
-                  requirement.fields
-                    .length
-                }{" "}
-                fields
-              </span>
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2">
-              {requirement.fields.map(
-                (
-                  field: RequirementField
-                ) => {
-                  const missing =
-                    field.required &&
-                    !field.value.trim();
-
-                  return (
-                    <div
-                      key={
-                        field.id
-                      }
-                    >
-                      <label className="mb-2 block text-xs font-bold uppercase text-slate-500">
-                        {
-                          field.label
-                        }
-
-                        {field.required && (
-                          <span className="ml-1 text-red-500">
-                            *
-                          </span>
-                        )}
-                      </label>
-
-                      <input
-                        value={
-                          field.value
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          onFieldChange(
-                            field.id,
-                            event
-                              .target
-                              .value
-                          )
-                        }
-                        placeholder={`Enter ${field.label}`}
-                        className={`
-                          w-full
-                          rounded-xl
-                          border
-                          px-4
-                          py-3
-                          outline-none
-                          transition
-                          focus:border-blue-500
-
-                          ${
-                            missing
-                              ? "border-amber-300 bg-amber-50"
-                              : "border-slate-200 bg-slate-50"
-                          }
-                        `}
-                      />
-                    </div>
-                  );
-                }
-              )}
-            </div>
-          </div>
-
-          {/* MISSING */}
-
-          {missingRequired.length >
-            0 && (
-            <div className="mt-6 flex gap-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
+          {missingCount > 0 && (
+            <div className="mt-5 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <AlertCircle
                 size={19}
-                className="shrink-0"
+                className="shrink-0 text-amber-600"
               />
 
-              <div>
-                <p className="font-bold">
-                  Important details
-                  missing
-                </p>
-
-                <p className="mt-1">
-                  {missingRequired
-                    .map(
-                      (field) =>
-                        field.label
-                    )
-                    .join(", ")}
-                </p>
-              </div>
+              <p className="text-sm leading-6 text-amber-800">
+                {missingCount} required
+                field
+                {missingCount > 1
+                  ? "s are"
+                  : " is"}{" "}
+                missing.
+              </p>
             </div>
           )}
 
-          {/* VERIFICATION INFO */}
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {requirement.fields.map(
+              (field) => (
+                <div
+                  key={
+                    field.id
+                  }
+                >
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    {field.label}
 
-          <div className="mt-6 rounded-2xl border border-slate-200 p-4">
-            <div className="flex gap-3">
-              <ShieldCheck
-                size={20}
-                className="mt-0.5 shrink-0 text-emerald-600"
-              />
+                    {field.required && (
+                      <span className="ml-1 text-red-500">
+                        *
+                      </span>
+                    )}
+                  </label>
 
-              <div>
-                <p className="text-sm font-bold">
-                  What happens next?
-                </p>
-
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Save ke baad
-                  login/register
-                  check hoga, phir
-                  phone OTP
-                  verification.
-                  Requirement uske
-                  baad AI verification
-                  queue mein jayegi.
-                </p>
-              </div>
-            </div>
+                  <input
+                    value={
+                      field.value
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      onFieldChange(
+                        field.id,
+                        event.target
+                          .value
+                      )
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+              )
+            )}
           </div>
-        </div>
 
-        {/* ACTIONS */}
-
-        <div
-          className="
-            sticky
-            bottom-0
-            flex
-            justify-end
-            gap-3
-            border-t
-            border-slate-200
-            bg-white
-            px-7
-            py-5
-          "
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-slate-200 px-6 py-3 font-semibold text-slate-600 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
+          <div className="mt-6 rounded-2xl bg-blue-50 p-4 text-sm leading-6 text-blue-700">
+            Next step: Buyer login
+            agar required ho, phir phone
+            verification. Uske baad
+            requirement verification
+            queue mein jayegi.
+          </div>
 
           <button
             type="button"
             onClick={onSave}
-            className="
-              flex
-              items-center
-              gap-2
-              rounded-xl
-              bg-slate-950
-              px-6
-              py-3
-              font-semibold
-              text-white
-              transition
-              hover:bg-blue-600
-            "
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3.5 font-semibold text-white transition hover:bg-blue-600"
           >
-            <Save size={17} />
+            <Save
+              size={18}
+            />
 
             Save Requirement
           </button>
@@ -2120,65 +1164,376 @@ function RequirementModal({
 }
 
 // =====================================================
-// HOW CARD
+// MOCK AI
 // =====================================================
 
-interface HowCardProps {
-  icon: ReactNode;
-  number: string;
-  title: string;
-  description: string;
+function generateMockRequirement(
+  text: string
+): StructuredRequirement {
+  const value =
+    text.toLowerCase();
+
+  if (
+    value.includes(
+      "corolla"
+    ) ||
+    value.includes("car") ||
+    value.includes(
+      "toyota"
+    )
+  ) {
+    return {
+      title:
+        "Toyota Corolla Required",
+
+      category:
+        "Vehicles",
+
+      subCategory: "Cars",
+
+      fields: [
+        field(
+          "make",
+          "Make",
+          "Toyota",
+          true
+        ),
+
+        field(
+          "model",
+          "Model",
+          "Corolla",
+          true
+        ),
+
+        field(
+          "year",
+          "Year",
+          "2021 - 2023",
+          true
+        ),
+
+        field(
+          "transmission",
+          "Transmission",
+          "Automatic",
+          false
+        ),
+
+        field(
+          "condition",
+          "Condition",
+          "Used - Excellent",
+          true
+        ),
+
+        field(
+          "budget",
+          "Budget",
+          "PKR 5,500,000",
+          true
+        ),
+
+        field(
+          "location",
+          "Location",
+          "Lahore",
+          true
+        ),
+      ],
+    };
+  }
+
+  if (
+    value.includes(
+      "cement"
+    )
+  ) {
+    return {
+      title:
+        "Cement Required for House Construction",
+
+      category:
+        "Construction",
+
+      subCategory:
+        "Building Material",
+
+      fields: [
+        field(
+          "material",
+          "Material",
+          "Cement",
+          true
+        ),
+
+        field(
+          "quantity",
+          "Quantity",
+          "400 Bags",
+          true
+        ),
+
+        field(
+          "brand",
+          "Preferred Brand",
+          "Bestway / Lucky",
+          false
+        ),
+
+        field(
+          "delivery",
+          "Delivery",
+          "Within 3 Days",
+          true
+        ),
+
+        field(
+          "budget",
+          "Budget",
+          "",
+          false
+        ),
+
+        field(
+          "location",
+          "Location",
+          "Islamabad",
+          true
+        ),
+      ],
+    };
+  }
+
+  if (
+    value.includes(
+      "watch"
+    ) ||
+    value.includes(
+      "rado"
+    )
+  ) {
+    return {
+      title:
+        "Original Rado Watch Required",
+
+      category:
+        "Fashion",
+
+      subCategory:
+        "Watches",
+
+      fields: [
+        field(
+          "brand",
+          "Brand",
+          "Rado",
+          true
+        ),
+
+        field(
+          "condition",
+          "Condition",
+          "New / Like New",
+          true
+        ),
+
+        field(
+          "authenticity",
+          "Authenticity",
+          "Original",
+          true
+        ),
+
+        field(
+          "boxpapers",
+          "Box & Papers",
+          "Preferred",
+          false
+        ),
+
+        field(
+          "budget",
+          "Budget",
+          "PKR 250,000",
+          true
+        ),
+
+        field(
+          "location",
+          "Location",
+          "Karachi",
+          true
+        ),
+      ],
+    };
+  }
+
+  if (
+    value.includes(
+      "laptop"
+    ) ||
+    value.includes(
+      "dell"
+    )
+  ) {
+    return {
+      title:
+        "Dell Laptop Required",
+
+      category:
+        "Electronics",
+
+      subCategory:
+        "Laptop",
+
+      fields: [
+        field(
+          "brand",
+          "Brand",
+          "Dell",
+          true
+        ),
+
+        field(
+          "processor",
+          "Processor",
+          "Core i7",
+          true
+        ),
+
+        field(
+          "ram",
+          "RAM",
+          "16GB",
+          true
+        ),
+
+        field(
+          "storage",
+          "Storage",
+          "512GB SSD",
+          true
+        ),
+
+        field(
+          "condition",
+          "Condition",
+          "Good / Excellent",
+          true
+        ),
+
+        field(
+          "budget",
+          "Budget",
+          "PKR 150,000",
+          true
+        ),
+
+        field(
+          "location",
+          "Location",
+          "Lahore",
+          true
+        ),
+      ],
+    };
+  }
+
+  return {
+    title:
+      "Buyer Requirement",
+
+    category:
+      "Other",
+
+    subCategory:
+      "General",
+
+    fields: [
+      field(
+        "requirement",
+        "Requirement",
+        text,
+        true
+      ),
+
+      field(
+        "quantity",
+        "Quantity",
+        "",
+        false
+      ),
+
+      field(
+        "condition",
+        "Condition",
+        "",
+        false
+      ),
+
+      field(
+        "budget",
+        "Budget",
+        "",
+        false
+      ),
+
+      field(
+        "location",
+        "Location",
+        "",
+        true
+      ),
+    ],
+  };
 }
+
+function field(
+  id: string,
+  label: string,
+  value: string,
+  required: boolean
+): RequirementField {
+  return {
+    id,
+    label,
+    value,
+    required,
+  };
+}
+
+// =====================================================
+// SMALL COMPONENTS
+// =====================================================
 
 function HowCard({
-  icon,
   number,
-  title,
-  description,
-}: HowCardProps) {
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 transition hover:-translate-y-1 hover:bg-white hover:shadow-lg">
-      <div className="flex items-center justify-between">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
-          {icon}
-        </div>
-
-        <span className="text-3xl font-black text-slate-200">
-          {number}
-        </span>
-      </div>
-
-      <h3 className="mt-6 text-xl font-bold">
-        {title}
-      </h3>
-
-      <p className="mt-3 leading-7 text-slate-500">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-// =====================================================
-// TRUST CARD
-// =====================================================
-
-function TrustCard({
   icon,
   title,
   text,
 }: {
+  number: string;
+
   icon: ReactNode;
+
   title: string;
+
   text: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-        {icon}
+    <div className="rounded-3xl border border-slate-200 bg-white p-6">
+      <div className="flex items-center justify-between">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+          {icon}
+        </div>
+
+        <span className="text-sm font-black text-slate-300">
+          {number}
+        </span>
       </div>
 
-      <h3 className="mt-5 font-bold">
+      <h3 className="mt-6 font-black">
         {title}
       </h3>
 
@@ -2189,133 +1544,58 @@ function TrustCard({
   );
 }
 
-// =====================================================
-// REVIEW
-// =====================================================
-
-interface ReviewProps {
-  name: string;
-  city: string;
-  text: string;
-}
-
-function Review({
-  name,
-  city,
-  text,
-}: ReviewProps) {
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm">
-      <div className="mb-5 text-lg">
-        ★★★★★
-      </div>
-
-      <p className="leading-7 text-slate-600">
-        "{text}"
-      </p>
-
-      <div className="mt-6">
-        <p className="font-bold">
-          {name}
-        </p>
-
-        <p className="text-sm text-slate-400">
-          {city}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// =====================================================
-// FOOTER TAG
-// =====================================================
-
-function FooterTag({
+function TrustItem({
+  title,
   text,
 }: {
+  title: string;
+
   text: string;
 }) {
   return (
-    <span
-      className="
-        rounded-full
-        border
-        border-slate-800
-        bg-slate-900
-        px-3
-        py-1.5
-        text-xs
-        text-slate-400
-      "
-    >
-      {text}
-    </span>
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+      <BadgeCheck
+        size={19}
+        className="text-emerald-400"
+      />
+
+      <h3 className="mt-4 font-bold">
+        {title}
+      </h3>
+
+      <p className="mt-2 text-sm leading-6 text-slate-400">
+        {text}
+      </p>
+    </div>
   );
-}
-
-// =====================================================
-// FOOTER COLUMN
-// =====================================================
-
-interface FooterColumnProps {
-  title: string;
-  links: string[];
 }
 
 function FooterColumn({
   title,
-  links,
-}: FooterColumnProps) {
+  items,
+}: {
+  title: string;
+
+  items: string[];
+}) {
   return (
     <div>
-      <h3 className="font-bold text-white">
+      <h3 className="font-bold">
         {title}
       </h3>
 
-      <div className="mt-5 space-y-3">
-        {links.map((link) => (
-          <button
-            key={link}
-            type="button"
-            className="
-              block
-              text-sm
-              text-slate-400
-              transition
-              hover:text-white
-            "
-          >
-            {link}
-          </button>
-        ))}
+      <div className="mt-4 space-y-3">
+        {items.map(
+          (item) => (
+            <p
+              key={item}
+              className="text-sm text-slate-500"
+            >
+              {item}
+            </p>
+          )
+        )}
       </div>
-    </div>
-  );
-}
-
-// =====================================================
-// FOOTER CONTACT
-// =====================================================
-
-interface FooterContactProps {
-  title: string;
-  value: string;
-}
-
-function FooterContact({
-  title,
-  value,
-}: FooterContactProps) {
-  return (
-    <div className="text-center md:text-left">
-      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-        {title}
-      </p>
-
-      <p className="mt-1 font-semibold text-slate-200">
-        {value}
-      </p>
     </div>
   );
 }

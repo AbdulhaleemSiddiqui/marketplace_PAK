@@ -1,5 +1,8 @@
-import { FileText, ImagePlus, Paperclip, X } from "lucide-react";
-import { useRef } from "react";
+import {
+  ImagePlus,
+  Paperclip,
+  X,
+} from "lucide-react";
 
 interface AttachmentMenuProps {
   onFilesSelected: (files: File[]) => void;

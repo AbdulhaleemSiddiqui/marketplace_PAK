@@ -13,6 +13,7 @@ import {
   } from "lucide-react";
   
   import {
+    useEffect,
     useState,
     type ReactNode,
   } from "react";
@@ -20,6 +21,7 @@ import {
   import {
     Link,
     Navigate,
+    useLocation,
     useNavigate,
   } from "react-router-dom";
   
@@ -54,13 +56,12 @@ import {
     SellerInquiry,
   } from "../types/marketplace";
   
-  // =====================================================
-  // PROFILE PAGE
-  // =====================================================
-  
   export default function Profile() {
     const navigate =
       useNavigate();
+  
+    const location =
+      useLocation();
   
     const [
       refreshKey,
@@ -80,20 +81,50 @@ import {
       setShowSellerVerification,
     ] = useState(false);
   
+    const initialMessage =
+      (
+        location.state as
+          | {
+              message?: string;
+            }
+          | null
+      )?.message ?? "";
+  
     const [
       successMessage,
       setSuccessMessage,
-    ] = useState("");
+    ] =
+      useState(
+        initialMessage
+      );
   
-    // refresh after localStorage changes
     void refreshKey;
   
     const user =
       getCurrentUser();
   
     // =====================================================
-    // NOT LOGGED IN
+    // SUCCESS
     // =====================================================
+  
+    useEffect(() => {
+      if (!successMessage) {
+        return;
+      }
+  
+      const timer =
+        window.setTimeout(
+          () => {
+            setSuccessMessage("");
+          },
+          3500
+        );
+  
+      return () =>
+        window.clearTimeout(
+          timer
+        );
+    }, [successMessage]);
   
     if (!user) {
       return (
@@ -111,7 +142,7 @@ import {
       user.role === "seller";
   
     // =====================================================
-    // BUYER DATA
+    // BUYER
     // =====================================================
   
     const requirements =
@@ -128,11 +159,22 @@ import {
           )
         : [];
   
+    // IMPORTANT COUNTS
+  
+    const totalRequirements =
+      requirements.length;
+  
     const pendingCount =
       requirements.filter(
         (item) =>
-          item.status ===
-          "ai_verification_pending"
+          [
+            "phone_verification_pending",
+            "phone_verified",
+            "ai_verification_pending",
+            "admin_review_required",
+          ].includes(
+            item.status
+          )
       ).length;
   
     const verifiedCount =
@@ -150,7 +192,7 @@ import {
       ).length;
   
     // =====================================================
-    // SELLER DATA
+    // SELLER
     // =====================================================
   
     const sellerInquiries =
@@ -179,18 +221,15 @@ import {
       "verified";
   
     // =====================================================
-    // LOGOUT
+    // ACTIONS
     // =====================================================
   
-    const handleLogout = () => {
-      logoutUser();
+    const handleLogout =
+      () => {
+        logoutUser();
   
-      navigate("/");
-    };
-  
-    // =====================================================
-    // BUYER AI VERIFICATION
-    // =====================================================
+        navigate("/");
+      };
   
     const handleConfirmVerification =
       () => {
@@ -213,13 +252,10 @@ import {
         );
   
         setRefreshKey(
-          (value) => value + 1
+          (value) =>
+            value + 1
         );
       };
-  
-    // =====================================================
-    // COMPLETE REQUIREMENT
-    // =====================================================
   
     const handleCompleteRequirement = (
       requirementId: string
@@ -233,13 +269,10 @@ import {
       );
   
       setRefreshKey(
-        (value) => value + 1
+        (value) =>
+          value + 1
       );
     };
-  
-    // =====================================================
-    // INQUIRY ACTION
-    // =====================================================
   
     const handleInquiryAction = (
       inquiryId: string,
@@ -259,13 +292,10 @@ import {
       );
   
       setRefreshKey(
-        (value) => value + 1
+        (value) =>
+          value + 1
       );
     };
-  
-    // =====================================================
-    // SELLER VERIFY
-    // =====================================================
   
     const handleSellerVerification = (
       businessName: string,
@@ -288,17 +318,12 @@ import {
       );
   
       setRefreshKey(
-        (value) => value + 1
+        (value) =>
+          value + 1
       );
   
-      // current user localStorage update hua hai.
-      // Simple demo refresh:
       window.location.reload();
     };
-  
-    // =====================================================
-    // UI
-    // =====================================================
   
     return (
       <div className="min-h-screen bg-slate-50">
@@ -327,7 +352,7 @@ import {
             <div className="flex items-center gap-3">
               <Link
                 to="/find"
-                className="hidden rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 sm:block"
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold"
               >
                 Find
               </Link>
@@ -337,7 +362,7 @@ import {
                 onClick={
                   handleLogout
                 }
-                className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold"
               >
                 <LogOut
                   size={17}
@@ -349,10 +374,8 @@ import {
           </div>
         </header>
   
-        {/* MAIN */}
-  
         <main className="mx-auto max-w-7xl px-6 py-10">
-          {/* PROFILE HEADER */}
+          {/* PROFILE */}
   
           <div className="rounded-3xl bg-slate-950 p-8 text-white">
             <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
@@ -375,41 +398,36 @@ import {
                   {user.phone}
                 </p>
   
-                {/* SELLER BUSINESS INFO */}
-  
                 {isSeller &&
-                  sellerVerified && (
+                  sellerVerified &&
+                  user.businessName && (
                     <div className="mt-5">
-                      {user.businessName && (
-                        <p className="flex items-center gap-2 text-sm text-slate-300">
-                          <Store
-                            size={15}
-                          />
+                      <p className="flex items-center gap-2 text-sm text-slate-300">
+                        <Store
+                          size={15}
+                        />
   
-                          {
-                            user.businessName
-                          }
-                        </p>
-                      )}
+                        {
+                          user.businessName
+                        }
+                      </p>
   
-                      {user.businessCity && (
-                        <p className="mt-1 text-sm text-slate-400">
-                          {
-                            user.businessCity
-                          }
+                      <p className="mt-1 text-sm text-slate-400">
+                        {
+                          user.businessCity
+                        }
   
-                          {user.businessCategory
-                            ? ` • ${user.businessCategory}`
-                            : ""}
-                        </p>
-                      )}
+                        {user.businessCategory
+                          ? ` • ${user.businessCategory}`
+                          : ""}
+                      </p>
                     </div>
                   )}
               </div>
   
               {/* BADGES */}
   
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap gap-3">
                 {user.phoneVerified ? (
                   <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300">
                     <BadgeCheck
@@ -428,8 +446,6 @@ import {
                   </span>
                 )}
   
-                {/* SELLER VERIFICATION */}
-  
                 {isSeller &&
                   (sellerVerified ? (
                     <span className="inline-flex items-center gap-2 rounded-full bg-blue-500/15 px-4 py-2 text-sm font-semibold text-blue-300">
@@ -447,13 +463,11 @@ import {
                           true
                         )
                       }
-                      className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+                      className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
                     >
                       Verify Seller
                     </button>
                   ))}
-  
-                {/* SELLER CREDITS */}
   
                 {isSeller && (
                   <span className="inline-flex items-center gap-2 rounded-full bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-300">
@@ -474,47 +488,37 @@ import {
   
           {isBuyer && (
             <>
-              {/* BUYER STATS */}
-  
-              <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard
-                  icon={
-                    <ShoppingBag />
-                  }
-                  label="Total Requirements"
-                  value={
-                    requirements.length
-                  }
-                />
-  
-                <StatCard
-                  icon={<Clock3 />}
-                  label="Verification Pending"
-                  value={
-                    pendingCount
-                  }
-                />
-  
-                <StatCard
-                  icon={
-                    <CheckCircle2 />
-                  }
-                  label="Verified"
-                  value={
-                    verifiedCount
-                  }
-                />
-  
-                <StatCard
-                  icon={
-                    <MessageCircle />
-                  }
-                  label="Seller Inquiries"
-                  value={
-                    buyerInquiries.length
-                  }
-                />
-              </div>
+ <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+  <StatCard
+    icon={<ShoppingBag />}
+    label="Total Requirements"
+    value={totalRequirements}
+  />
+
+  <StatCard
+    icon={<Clock3 />}
+    label="Verification Pending"
+    value={pendingCount}
+  />
+
+  <StatCard
+    icon={<CheckCircle2 />}
+    label="Verified"
+    value={verifiedCount}
+  />
+
+  <StatCard
+    icon={<Box />}
+    label="Completed"
+    value={completedCount}
+  />
+
+  <StatCard
+    icon={<MessageCircle />}
+    label="Seller Inquiries"
+    value={buyerInquiries.length}
+  />
+</div>
   
               {/* REQUIREMENTS */}
   
@@ -534,7 +538,9 @@ import {
                         key={
                           item.id
                         }
-                        item={item}
+                        item={
+                          item
+                        }
                         inquiryCount={
                           buyerInquiries.filter(
                             (inquiry) =>
@@ -558,11 +564,11 @@ import {
                 )}
               </HistoryCard>
   
-              {/* BUYER INQUIRIES */}
+              {/* INQUIRIES */}
   
               <HistoryCard
                 title="Seller Inquiries"
-                subtitle="Sellers ki offers jo aapki requirements ke against aayi hain"
+                subtitle="Aapki requirements par sellers ki offers"
               >
                 {buyerInquiries.length ===
                 0 ? (
@@ -605,8 +611,6 @@ import {
   
           {isSeller && (
             <>
-              {/* SELLER VERIFICATION WARNING */}
-  
               {!sellerVerified && (
                 <div className="mt-8 rounded-3xl border border-amber-200 bg-amber-50 p-6">
                   <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
@@ -615,11 +619,11 @@ import {
                         Seller Verification Required
                       </h2>
   
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-700">
+                      <p className="mt-2 text-sm leading-6 text-amber-700">
                         Buyer requirements
                         browse kar sakte hain,
                         lekin inquiry send
-                        karne ke liye seller
+                        karne se pehle seller
                         verification required
                         hai.
                       </p>
@@ -632,7 +636,7 @@ import {
                           true
                         )
                       }
-                      className="shrink-0 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white"
+                      className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white"
                     >
                       Verify Seller
                     </button>
@@ -640,11 +644,11 @@ import {
                 </div>
               )}
   
-              {/* SELLER STATS */}
-  
               <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
-                  icon={<Coins />}
+                  icon={
+                    <Coins />
+                  }
                   label="Credit Balance"
                   value={
                     creditBalance
@@ -688,12 +692,10 @@ import {
                 />
               </div>
   
-              {/* FIND CTA */}
-  
               <div className="mt-8">
                 <Link
                   to="/find"
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 font-semibold text-white transition hover:bg-blue-600"
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 font-semibold text-white hover:bg-blue-600"
                 >
                   <ShoppingBag
                     size={17}
@@ -703,26 +705,24 @@ import {
                 </Link>
               </div>
   
-              {/* SENT INQUIRIES */}
-  
               <HistoryCard
                 title="My Sent Inquiries"
-                subtitle="Buyer requirements ke against bheji hui inquiries"
+                subtitle="Buyer requirements par bheji hui inquiries"
               >
                 {sellerInquiries.length ===
                 0 ? (
                   <EmptyHistory
-                    text="Abhi aapne koi inquiry send nahi ki."
+                    text="Abhi koi inquiry send nahi ki."
                   />
                 ) : (
                   sellerInquiries.map(
-                    (item) => (
+                    (inquiry) => (
                       <SellerInquiryCard
                         key={
-                          item.id
+                          inquiry.id
                         }
                         inquiry={
-                          item
+                          inquiry
                         }
                       />
                     )
@@ -730,11 +730,9 @@ import {
                 )}
               </HistoryCard>
   
-              {/* CREDIT HISTORY */}
-  
               <HistoryCard
                 title="Credit Transactions"
-                subtitle="Seller wallet ki credit history"
+                subtitle="Seller wallet ki transaction history"
               >
                 {creditTransactions.length ===
                 0 ? (
@@ -751,7 +749,7 @@ import {
                         className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 p-5 sm:flex-row sm:items-center"
                       >
                         <div>
-                          <p className="font-bold text-slate-900">
+                          <p className="font-bold">
                             {
                               transaction.description
                             }
@@ -764,7 +762,7 @@ import {
                           </p>
                         </div>
   
-                        <div className="text-left sm:text-right">
+                        <div className="sm:text-right">
                           <p
                             className={`font-black ${
                               transaction.amount >
@@ -800,7 +798,7 @@ import {
           )}
         </main>
   
-        {/* BUYER AI VERIFICATION */}
+        {/* BUYER VERIFICATION */}
   
         <AiVerificationModal
           open={
@@ -839,7 +837,7 @@ import {
   
         {successMessage && (
           <div className="fixed bottom-6 right-6 z-[150] max-w-sm rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-semibold text-white shadow-2xl">
-            {successMessage}
+            ✓ {successMessage}
           </div>
         )}
       </div>
@@ -847,7 +845,7 @@ import {
   }
   
   // =====================================================
-  // REQUIREMENT ROW
+  // REQUIREMENT
   // =====================================================
   
   function RequirementRow({
@@ -856,53 +854,57 @@ import {
     onStartVerification,
     onComplete,
   }: {
-    item: SavedBuyerRequirement;
+    item:
+      SavedBuyerRequirement;
   
     inquiryCount: number;
   
-    onStartVerification: () => void;
+    onStartVerification:
+      () => void;
   
     onComplete: () => void;
   }) {
-    const isPending =
-      item.status ===
-      "ai_verification_pending";
-  
-    const isVerified =
-      item.status ===
-      "verified";
-  
-    const isCompleted =
-      item.status ===
-      "completed";
+    const pending =
+      [
+        "phone_verification_pending",
+        "phone_verified",
+        "ai_verification_pending",
+        "admin_review_required",
+      ].includes(
+        item.status
+      );
   
     return (
       <div className="rounded-2xl border border-slate-200 p-5">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-bold text-slate-900">
+            <div className="flex flex-wrap gap-2">
+              <p className="font-bold">
                 {item.title}
               </p>
   
-              {isVerified && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-                  <BadgeCheck
-                    size={13}
-                  />
+              {pending && (
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-600">
+                  Verification Pending
+                </span>
+              )}
   
+              {item.status ===
+                "verified" && (
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
                   Verified Requirement
                 </span>
               )}
   
-              {isCompleted && (
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
+              {item.status ===
+                "completed" && (
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">
                   Completed
                 </span>
               )}
             </div>
   
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-slate-500">
               {item.category}
   
               {item.subCategory
@@ -911,11 +913,7 @@ import {
             </p>
   
             {inquiryCount > 0 && (
-              <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-blue-600">
-                <MessageCircle
-                  size={15}
-                />
-  
+              <p className="mt-2 text-sm font-semibold text-blue-600">
                 {inquiryCount} Seller
                 Inquiries
               </p>
@@ -923,7 +921,8 @@ import {
           </div>
   
           <div className="flex flex-wrap gap-2">
-            {isPending && (
+            {item.status ===
+              "ai_verification_pending" && (
               <button
                 type="button"
                 onClick={
@@ -939,11 +938,12 @@ import {
               </button>
             )}
   
-            {isVerified && (
+            {item.status ===
+              "verified" && (
               <>
                 <Link
                   to="/find"
-                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold"
                 >
                   View Public Post
                 </Link>
@@ -953,7 +953,7 @@ import {
                   onClick={
                     onComplete
                   }
-                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold"
                 >
                   Mark Completed
                 </button>
@@ -966,7 +966,7 @@ import {
   }
   
   // =====================================================
-  // BUYER INQUIRY CARD
+  // BUYER INQUIRY
   // =====================================================
   
   function BuyerInquiryCard({
@@ -974,7 +974,8 @@ import {
     onAccept,
     onReject,
   }: {
-    inquiry: SellerInquiry;
+    inquiry:
+      SellerInquiry;
   
     onAccept: () => void;
   
@@ -984,17 +985,15 @@ import {
       <div className="rounded-2xl border border-slate-200 p-5">
         <div className="flex flex-col justify-between gap-5 md:flex-row">
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-black">
-                {
-                  inquiry.sellerName
-                }
-              </p>
+            <p className="font-black">
+              {
+                inquiry.sellerName
+              }
+            </p>
   
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize text-slate-500">
-                {inquiry.status}
-              </span>
-            </div>
+            <span className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize">
+              {inquiry.status}
+            </span>
   
             {inquiry.offeredPrice && (
               <p className="mt-3 font-bold text-blue-600">
@@ -1005,13 +1004,13 @@ import {
               </p>
             )}
   
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+            <p className="mt-3 text-sm leading-6 text-slate-600">
               {inquiry.message}
             </p>
   
             {inquiry.status ===
               "accepted" && (
-              <div className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-700">
+              <div className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700">
                 <strong>
                   Seller Contact
                 </strong>
@@ -1033,19 +1032,21 @@ import {
   
           {inquiry.status ===
             "sent" && (
-            <div className="flex shrink-0 gap-2">
+            <div className="flex gap-2">
               <button
-                type="button"
-                onClick={onAccept}
+                onClick={
+                  onAccept
+                }
                 className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white"
               >
                 Accept
               </button>
   
               <button
-                type="button"
-                onClick={onReject}
-                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600"
+                onClick={
+                  onReject
+                }
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold"
               >
                 Reject
               </button>
@@ -1057,43 +1058,32 @@ import {
   }
   
   // =====================================================
-  // SELLER INQUIRY CARD
+  // SELLER INQUIRY
   // =====================================================
   
   function SellerInquiryCard({
     inquiry,
   }: {
-    inquiry: SellerInquiry;
+    inquiry:
+      SellerInquiry;
   }) {
     return (
       <div className="rounded-2xl border border-slate-200 p-5">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div className="flex justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <MessageCircle
-                size={17}
-                className="text-blue-600"
-              />
-  
-              <p className="font-bold">
-                Inquiry
-              </p>
-            </div>
-  
             {inquiry.offeredPrice && (
-              <p className="mt-3 font-semibold text-blue-600">
-                Offer:{" "}
+              <p className="font-bold text-blue-600">
                 {
                   inquiry.offeredPrice
                 }
               </p>
             )}
   
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+            <p className="mt-2 text-sm leading-6 text-slate-600">
               {inquiry.message}
             </p>
   
-            <p className="mt-3 text-xs text-slate-400">
+            <p className="mt-2 text-xs text-slate-400">
               Cost:{" "}
               {
                 inquiry.creditCost
@@ -1102,7 +1092,7 @@ import {
             </p>
           </div>
   
-          <span className="w-fit rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold capitalize text-slate-600">
+          <span className="h-fit rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold capitalize">
             {inquiry.status}
           </span>
         </div>
@@ -1111,7 +1101,7 @@ import {
   }
   
   // =====================================================
-  // STAT CARD
+  // COMMON
   // =====================================================
   
   function StatCard({
@@ -1142,10 +1132,6 @@ import {
     );
   }
   
-  // =====================================================
-  // HISTORY CARD
-  // =====================================================
-  
   function HistoryCard({
     title,
     subtitle,
@@ -1173,10 +1159,6 @@ import {
       </div>
     );
   }
-  
-  // =====================================================
-  // EMPTY
-  // =====================================================
   
   function EmptyHistory({
     text,
