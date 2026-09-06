@@ -3,7 +3,7 @@ import {
   Paperclip,
   X,
 } from "lucide-react";
-
+import { useRef } from "react";
 interface AttachmentMenuProps {
   onFilesSelected: (files: File[]) => void;
   onClose: () => void;
