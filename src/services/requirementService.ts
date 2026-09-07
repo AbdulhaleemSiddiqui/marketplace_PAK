@@ -1,6 +1,7 @@
 import type { User } from "../types/auth";
 
 import type {
+  RequirementActivityStatus,
   RequirementStatus,
   SavedBuyerRequirement,
   StructuredRequirement,
@@ -12,26 +13,25 @@ const PENDING_KEY =
 const REQUIREMENTS_KEY =
   "buyer_requirements";
 
-// =====================================================
-// PENDING REQUIREMENT
-// =====================================================
+// ======================================================
+// PENDING
+// ======================================================
 
 export function savePendingRequirement(
-  requirement: StructuredRequirement
+  requirement: StructuredRequirement,
 ) {
   localStorage.setItem(
     PENDING_KEY,
-    JSON.stringify(requirement)
+    JSON.stringify(requirement),
   );
 }
 
 export function getPendingRequirement():
-  | StructuredRequirement
-  | null {
+  StructuredRequirement | null {
   try {
     const value =
       localStorage.getItem(
-        PENDING_KEY
+        PENDING_KEY,
       );
 
     if (!value) {
@@ -46,58 +46,88 @@ export function getPendingRequirement():
 
 export function clearPendingRequirement() {
   localStorage.removeItem(
-    PENDING_KEY
+    PENDING_KEY,
   );
 }
 
-// =====================================================
-// GET ALL REQUIREMENTS
-// =====================================================
+// ======================================================
+// GET ALL
+// ======================================================
 
 export function getAllBuyerRequirements():
   SavedBuyerRequirement[] {
   try {
     const value =
       localStorage.getItem(
-        REQUIREMENTS_KEY
+        REQUIREMENTS_KEY,
       );
 
     if (!value) {
       return [];
     }
 
-    return JSON.parse(value);
+    const parsed =
+      JSON.parse(value) as SavedBuyerRequirement[];
+
+    /*
+      Backward compatibility:
+      old posts may not have activityStatus.
+      Treat them as active.
+    */
+
+    return parsed.map(
+      (item) => ({
+        ...item,
+
+        activityStatus:
+          item.activityStatus ??
+          "active",
+      }),
+    );
   } catch {
     return [];
   }
 }
 
-// =====================================================
-// GET CURRENT USER REQUIREMENTS
-// =====================================================
+// ======================================================
+// SAVE ALL
+// ======================================================
+
+function saveAllBuyerRequirements(
+  requirements: SavedBuyerRequirement[],
+) {
+  localStorage.setItem(
+    REQUIREMENTS_KEY,
+    JSON.stringify(requirements),
+  );
+}
+
+// ======================================================
+// USER REQUIREMENTS
+// ======================================================
 
 export function getBuyerRequirementsByUser(
-  userId: string
+  userId: string,
 ): SavedBuyerRequirement[] {
   return getAllBuyerRequirements()
     .filter(
       (item) =>
-        item.userId === userId
+        item.userId === userId,
     )
     .sort(
       (a, b) =>
         new Date(
-          b.createdAt
+          b.createdAt,
         ).getTime() -
         new Date(
-          a.createdAt
-        ).getTime()
+          a.createdAt,
+        ).getTime(),
     );
 }
 
-// =====================================================
-// GET PUBLIC VERIFIED REQUIREMENTS
-// =====================================================
+// ======================================================
+// PUBLIC VERIFIED REQUIREMENTS
+// ======================================================
 
 export function getVerifiedBuyerRequirements():
   SavedBuyerRequirement[] {
@@ -106,28 +136,45 @@ export function getVerifiedBuyerRequirements():
       (item) =>
         item.status ===
           "verified" &&
-        item.aiVerified === true
+        item.aiVerified ===
+          true,
     )
     .sort(
       (a, b) =>
         new Date(
-          b.createdAt
+          b.createdAt,
         ).getTime() -
         new Date(
-          a.createdAt
-        ).getTime()
+          a.createdAt,
+        ).getTime(),
     );
 }
 
-// =====================================================
-// SAVE NEW REQUIREMENT
-// =====================================================
+// ======================================================
+// GET ONE
+// ======================================================
+
+export function getBuyerRequirementById(
+  requirementId: string,
+): SavedBuyerRequirement | null {
+  return (
+    getAllBuyerRequirements().find(
+      (item) =>
+        item.id ===
+        requirementId,
+    ) ?? null
+  );
+}
+
+// ======================================================
+// CREATE
+// ======================================================
 
 export function saveBuyerRequirement(
   requirement: StructuredRequirement,
   user: User,
   status: RequirementStatus =
-    "ai_verification_pending"
+    "ai_verification_pending",
 ): SavedBuyerRequirement {
   const requirements =
     getAllBuyerRequirements();
@@ -135,110 +182,206 @@ export function saveBuyerRequirement(
   const now =
     new Date().toISOString();
 
-  const newRequirement: SavedBuyerRequirement =
-    {
-      id: crypto.randomUUID(),
+  const newRequirement:
+    SavedBuyerRequirement = {
+    id:
+      crypto.randomUUID(),
 
-      userId: user.id,
+    userId:
+      user.id,
 
-      ...requirement,
+    ...requirement,
 
-      status,
+    status,
 
-      phoneVerified:
-        user.phoneVerified,
+    activityStatus:
+      "active",
 
-      aiVerified:
-        status === "verified",
+    phoneVerified:
+      user.phoneVerified,
 
-      createdAt: now,
+    aiVerified:
+      status ===
+      "verified",
 
-      updatedAt: now,
-    };
+    createdAt:
+      now,
+
+    updatedAt:
+      now,
+  };
 
   requirements.unshift(
-    newRequirement
+    newRequirement,
   );
 
-  localStorage.setItem(
-    REQUIREMENTS_KEY,
-    JSON.stringify(requirements)
+  saveAllBuyerRequirements(
+    requirements,
   );
 
   return newRequirement;
 }
 
-// =====================================================
-// UPDATE STATUS
-// =====================================================
+// ======================================================
+// VERIFICATION STATUS
+// ======================================================
 
 export function updateRequirementStatus(
   requirementId: string,
-  status: RequirementStatus
+  status: RequirementStatus,
 ): SavedBuyerRequirement | null {
   const requirements =
     getAllBuyerRequirements();
 
   let updatedRequirement:
-    | SavedBuyerRequirement
-    | null = null;
+    SavedBuyerRequirement | null =
+    null;
 
   const updatedRequirements =
-    requirements.map((item) => {
-      if (
-        item.id !==
-        requirementId
-      ) {
-        return item;
-      }
+    requirements.map(
+      (item) => {
+        if (
+          item.id !==
+          requirementId
+        ) {
+          return item;
+        }
 
-      updatedRequirement = {
-        ...item,
+        updatedRequirement = {
+          ...item,
 
-        status,
+          status,
 
-        aiVerified:
-          status === "verified",
+          aiVerified:
+            status ===
+            "verified",
 
-        updatedAt:
-          new Date().toISOString(),
-      };
+          updatedAt:
+            new Date().toISOString(),
+        };
 
-      return updatedRequirement;
-    });
+        return updatedRequirement;
+      },
+    );
 
-  localStorage.setItem(
-    REQUIREMENTS_KEY,
-    JSON.stringify(
-      updatedRequirements
-    )
+  saveAllBuyerRequirements(
+    updatedRequirements,
   );
 
   return updatedRequirement;
 }
 
-// =====================================================
-// MARK AI VERIFIED
-// =====================================================
+// ======================================================
+// ACTIVITY STATUS
+// ======================================================
+
+export function updateRequirementActivityStatus(
+  requirementId: string,
+  userId: string,
+  activityStatus: RequirementActivityStatus,
+): SavedBuyerRequirement | null {
+  const requirements =
+    getAllBuyerRequirements();
+
+  const target =
+    requirements.find(
+      (item) =>
+        item.id ===
+        requirementId,
+    );
+
+  if (!target) {
+    return null;
+  }
+
+  /*
+    Only owner buyer can change
+    active/inactive state.
+  */
+
+  if (
+    target.userId !==
+    userId
+  ) {
+    throw new Error(
+      "You can only update your own requirement.",
+    );
+  }
+
+  let updatedRequirement:
+    SavedBuyerRequirement | null =
+    null;
+
+  const updatedRequirements =
+    requirements.map(
+      (item) => {
+        if (
+          item.id !==
+          requirementId
+        ) {
+          return item;
+        }
+
+        updatedRequirement = {
+          ...item,
+
+          activityStatus,
+
+          updatedAt:
+            new Date().toISOString(),
+        };
+
+        return updatedRequirement;
+      },
+    );
+
+  saveAllBuyerRequirements(
+    updatedRequirements,
+  );
+
+  return updatedRequirement;
+}
+
+// ======================================================
+// HELPERS
+// ======================================================
 
 export function markRequirementVerified(
-  requirementId: string
+  requirementId: string,
 ) {
   return updateRequirementStatus(
     requirementId,
-    "verified"
+    "verified",
   );
 }
 
-// =====================================================
-// MARK COMPLETED
-// =====================================================
-
 export function markRequirementCompleted(
-  requirementId: string
+  requirementId: string,
 ) {
   return updateRequirementStatus(
     requirementId,
-    "completed"
+    "completed",
+  );
+}
+
+export function markRequirementActive(
+  requirementId: string,
+  userId: string,
+) {
+  return updateRequirementActivityStatus(
+    requirementId,
+    userId,
+    "active",
+  );
+}
+
+export function markRequirementInactive(
+  requirementId: string,
+  userId: string,
+) {
+  return updateRequirementActivityStatus(
+    requirementId,
+    userId,
+    "inactive",
   );
 }

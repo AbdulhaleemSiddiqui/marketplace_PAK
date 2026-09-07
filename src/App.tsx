@@ -4,7 +4,6 @@ import {
   Routes,
 } from "react-router-dom";
 
-import Home from "./pages/Home";
 import Find from "./pages/Find";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -16,9 +15,17 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/*
+          Meeting change:
+          Home.tsx delete nahi hua.
+          Filhal homepage UI hidden hai.
+
+          "/" directly marketplace open karega.
+        */}
+
         <Route
           path="/"
-          element={<Home />}
+          element={<Find />}
         />
 
         <Route

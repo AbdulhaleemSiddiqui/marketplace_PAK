@@ -1,10 +1,13 @@
-export type UserRole =
-  | "buyer"
-  | "seller";
+export type UserRole = "buyer" | "seller";
+export type InputMode = "text" | "voice";
 
-export type InputMode =
-  | "text"
-  | "voice";
+export type RequirementType =
+  | "product"
+  | "service";
+
+export type RequirementActivityStatus =
+  | "active"
+  | "inactive";
 
 export interface Attachment {
   id: string;
@@ -30,6 +33,7 @@ export interface StructuredRequirement {
   category: string;
   subCategory?: string;
   title: string;
+  requirementType?: RequirementType;
   fields: RequirementField[];
 }
 
@@ -46,28 +50,42 @@ export type RequirementStatus =
 export interface SavedBuyerRequirement
   extends StructuredRequirement {
   id: string;
-
   userId: string;
 
+  // Verification status
   status: RequirementStatus;
 
-  phoneVerified: boolean;
+  // Buyer controlled state
+  activityStatus: RequirementActivityStatus;
 
+  phoneVerified: boolean;
   aiVerified: boolean;
 
   createdAt: string;
-
   updatedAt: string;
 }
 
 export interface BuyerRequirement {
   id: string;
+  userId?: string;
+
   title: string;
   description: string;
+
   location: string;
   budget?: string;
+
   category?: string;
+  requirementType?: RequirementType;
+
   verified: boolean;
+  activityStatus?: RequirementActivityStatus;
+
+  createdAt?: string;
+
+  userName?: string;
+  userRating?: number;
+  userReviewCount?: number;
 }
 
 export type SellerListingStatus =
@@ -77,27 +95,20 @@ export type SellerListingStatus =
 
 export interface SellerListing {
   id: string;
-
   userId?: string;
 
   title: string;
-
   description: string;
 
   location: string;
 
   price?: string;
-
   category?: string;
 
   verified: boolean;
 
   status?: SellerListingStatus;
 }
-
-// =====================================================
-// INQUIRY
-// =====================================================
 
 export type InquiryStatus =
   | "sent"
@@ -110,19 +121,14 @@ export interface SellerInquiry {
   id: string;
 
   requirementId: string;
-
   buyerUserId: string;
 
   sellerUserId: string;
-
   sellerName: string;
-
   sellerPhone: string;
-
   sellerEmail: string;
 
   message: string;
-
   offeredPrice?: string;
 
   creditCost: number;
@@ -130,13 +136,8 @@ export interface SellerInquiry {
   status: InquiryStatus;
 
   createdAt: string;
-
   updatedAt: string;
 }
-
-// =====================================================
-// CREDIT
-// =====================================================
 
 export type CreditTransactionType =
   | "initial_balance"
@@ -146,17 +147,14 @@ export type CreditTransactionType =
 
 export interface CreditTransaction {
   id: string;
-
   userId: string;
 
   type: CreditTransactionType;
 
   amount: number;
-
   balanceAfter: number;
 
   description: string;
-
   referenceId?: string;
 
   createdAt: string;
