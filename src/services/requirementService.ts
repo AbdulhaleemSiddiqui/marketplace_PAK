@@ -223,6 +223,130 @@ export function saveBuyerRequirement(
 }
 
 // ======================================================
+// EDIT REQUIREMENT CONTENT
+// ======================================================
+
+export function updateBuyerRequirementContent(
+  requirementId: string,
+  userId: string,
+  details: string,
+  images: string[],
+): SavedBuyerRequirement | null {
+  const cleanDetails = details.trim();
+
+  const cleanImages =
+    images
+      .map((image) => image.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+
+  if (!cleanDetails) {
+    throw new Error(
+      "Requirement details are required.",
+    );
+  }
+
+  if (cleanImages.length === 0) {
+    throw new Error(
+      "At least one image is required.",
+    );
+  }
+
+  const requirements =
+    getAllBuyerRequirements();
+
+  const target =
+    requirements.find(
+      (item) =>
+        item.id === requirementId,
+    );
+
+  if (!target) {
+    return null;
+  }
+
+  if (target.userId !== userId) {
+    throw new Error(
+      "You can only edit your own requirement.",
+    );
+  }
+
+  let updatedRequirement:
+    SavedBuyerRequirement | null =
+    null;
+
+  const updatedRequirements =
+    requirements.map(
+      (item) => {
+        if (item.id !== requirementId) {
+          return item;
+        }
+
+        const preservedFields =
+          item.fields.filter(
+            (field) => {
+              const id =
+                field.id
+                  .trim()
+                  .toLowerCase();
+
+              return (
+                !id.startsWith("image") &&
+                id !== "details" &&
+                id !== "detail" &&
+                id !== "description"
+              );
+            },
+          );
+
+        const nextStatus:
+          RequirementStatus =
+          item.status === "verified"
+            ? "admin_review_required"
+            : item.status;
+
+        updatedRequirement = {
+          ...item,
+
+          fields: [
+            ...preservedFields,
+            {
+              id: "details",
+              label: "Details",
+              value: cleanDetails,
+              required: true,
+            },
+            ...cleanImages.map(
+              (image, index) => ({
+                id: `image${index + 1}`,
+                label: `Image ${index + 1}`,
+                value: image,
+                required: true,
+              }),
+            ),
+          ],
+
+          status: nextStatus,
+
+          aiVerified:
+            nextStatus === "verified",
+
+          updatedAt:
+            new Date().toISOString(),
+        };
+
+        return updatedRequirement;
+      },
+    );
+
+  saveAllBuyerRequirements(
+    updatedRequirements,
+  );
+
+  return updatedRequirement;
+}
+
+// ======================================================
 // VERIFICATION STATUS
 // ======================================================
 

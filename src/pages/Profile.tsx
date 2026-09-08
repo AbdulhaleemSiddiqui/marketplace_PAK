@@ -6,10 +6,11 @@ import {
   Coins,
   LogOut,
   MessageCircle,
-  PhoneCall,
+  Pencil,
   ShoppingBag,
   Sparkles,
   Store,
+  X,
 } from "lucide-react";
 import {
   markRequirementActive,
@@ -20,6 +21,7 @@ import {
 import {
   useEffect,
   useState,
+  type ChangeEvent,
   type ReactNode,
 } from "react";
 
@@ -30,7 +32,6 @@ import {
   useNavigate,
 } from "react-router-dom";
 
-import AiVerificationModal from "../components/buyer/AiVerificationModal";
 import SellerVerificationModal from "../components/seller/SellerVerificationModal";
 
 import {
@@ -52,7 +53,7 @@ import {
 
 import {
   getBuyerRequirementsByUser,
-  markRequirementVerified,
+  updateBuyerRequirementContent,
 } from "../services/requirementService";
 
 import type {
@@ -72,15 +73,16 @@ export default function Profile() {
     setRefreshKey,
   ] = useState(0);
 
+
   const [
-    verificationRequirement,
-    setVerificationRequirement,
+    editingRequirement,
+    setEditingRequirement,
   ] =
     useState<SavedBuyerRequirement | null>(
       null
     );
 
-  const [
+const [
     showSellerVerification,
     setShowSellerVerification,
   ] = useState(false);
@@ -235,31 +237,48 @@ export default function Profile() {
       navigate("/");
     };
 
-  const handleConfirmVerification =
-    () => {
-      if (
-        !verificationRequirement
-      ) {
-        return;
-      }
+  const handleSaveRequirementEdit = (
+    details: string,
+    images: string[]
+  ) => {
+    if (!editingRequirement) {
+      return;
+    }
 
-      markRequirementVerified(
-        verificationRequirement.id
+    try {
+      const wasVerified =
+        editingRequirement.status ===
+        "verified";
+
+      updateBuyerRequirementContent(
+        editingRequirement.id,
+        user.id,
+        details,
+        images
       );
 
-      setVerificationRequirement(
+      setEditingRequirement(
         null
       );
 
       setSuccessMessage(
-        "Requirement verified and published successfully."
+        wasVerified
+          ? "Requirement updated and sent for admin review again."
+          : "Requirement updated successfully."
       );
 
       setRefreshKey(
         (value) =>
           value + 1
       );
-    };
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to update requirement."
+      );
+    }
+  };
 
   const handleToggleRequirementActivity = (
     requirement: SavedBuyerRequirement
@@ -524,7 +543,7 @@ export default function Profile() {
 
 <StatCard
   icon={<Clock3 />}
-  label="Verification Pending"
+  label="Pending Admin Review"
   value={pendingCount}
 />
 
@@ -575,12 +594,12 @@ export default function Profile() {
                             item.id
                         ).length
                       }
-                      onStartVerification={() =>
-                        setVerificationRequirement(
+                      onEdit={() =>
+                        setEditingRequirement(
                           item
                         )
                       }
-                      onToggleActivity={() =>
+onToggleActivity={() =>
                         handleToggleRequirementActivity(
                           item
                         )
@@ -825,22 +844,22 @@ export default function Profile() {
         )}
       </main>
 
-      {/* BUYER VERIFICATION */}
+      {/* EDIT REQUIREMENT */}
 
-      <AiVerificationModal
+      <EditRequirementModal
         open={
-          !!verificationRequirement
+          !!editingRequirement
         }
         requirement={
-          verificationRequirement
+          editingRequirement
         }
         onClose={() =>
-          setVerificationRequirement(
+          setEditingRequirement(
             null
           )
         }
-        onConfirm={
-          handleConfirmVerification
+        onSave={
+          handleSaveRequirementEdit
         }
       />
 
@@ -875,10 +894,417 @@ export default function Profile() {
 // REQUIREMENT
 // =====================================================
 
+function EditRequirementModal({
+  open,
+  requirement,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  requirement:
+    SavedBuyerRequirement | null;
+  onClose: () => void;
+  onSave: (
+    details: string,
+    images: string[]
+  ) => void;
+}) {
+  const [
+    details,
+    setDetails,
+  ] = useState("");
+
+  const [
+    images,
+    setImages,
+  ] =
+    useState<string[]>([]);
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+  useEffect(() => {
+    if (
+      !open ||
+      !requirement
+    ) {
+      return;
+    }
+
+    const detailField =
+      requirement.fields.find(
+        (field) => {
+          const id =
+            field.id
+              .trim()
+              .toLowerCase();
+
+          return (
+            id === "details" ||
+            id === "detail" ||
+            id === "description"
+          );
+        }
+      );
+
+    const fallbackDetails =
+      requirement.fields
+        .filter(
+          (field) =>
+            !field.id
+              .trim()
+              .toLowerCase()
+              .startsWith(
+                "image"
+              ) &&
+            field.value
+        )
+        .slice(0, 5)
+        .map(
+          (field) =>
+            `${field.label}: ${field.value}`
+        )
+        .join("\n");
+
+    const existingImages =
+      requirement.fields
+        .filter(
+          (field) =>
+            field.id
+              .trim()
+              .toLowerCase()
+              .startsWith(
+                "image"
+              ) &&
+            Boolean(
+              field.value
+            )
+        )
+        .map(
+          (field) =>
+            field.value
+        )
+        .slice(0, 5);
+
+    setDetails(
+      detailField?.value ??
+      fallbackDetails
+    );
+
+    setImages(
+      existingImages
+    );
+
+    setError("");
+  }, [
+    open,
+    requirement,
+  ]);
+
+  if (
+    !open ||
+    !requirement
+  ) {
+    return null;
+  }
+
+  const handleFiles = (
+    event:
+      ChangeEvent<HTMLInputElement>
+  ) => {
+    const files =
+      Array.from(
+        event.target.files ??
+        []
+      ).slice(
+        0,
+        Math.max(
+          0,
+          5 - images.length
+        )
+      );
+
+    if (
+      files.length === 0
+    ) {
+      return;
+    }
+
+    Promise.all(
+      files.map(
+        (file) =>
+          new Promise<string>(
+            (
+              resolve,
+              reject
+            ) => {
+              const reader =
+                new FileReader();
+
+              reader.onload =
+                () =>
+                  resolve(
+                    String(
+                      reader.result ??
+                      ""
+                    )
+                  );
+
+              reader.onerror =
+                () =>
+                  reject(
+                    new Error(
+                      "Image could not be read."
+                    )
+                  );
+
+              reader.readAsDataURL(
+                file
+              );
+            }
+          )
+      )
+    )
+      .then(
+        (
+          uploadedImages
+        ) => {
+          setImages(
+            (
+              current
+            ) => [
+              ...current,
+              ...uploadedImages,
+            ].slice(
+              0,
+              5
+            )
+          );
+
+          setError("");
+        }
+      )
+      .catch(() =>
+        setError(
+          "Image upload failed."
+        )
+      );
+
+    event.target.value =
+      "";
+  };
+
+  const submit = () => {
+    const cleanDetails =
+      details.trim();
+
+    if (!cleanDetails) {
+      setError(
+        "Details are required."
+      );
+
+      return;
+    }
+
+    if (
+      images.length === 0
+    ) {
+      setError(
+        "At least one image is required."
+      );
+
+      return;
+    }
+
+    onSave(
+      cleanDetails,
+      images
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/50 p-4">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-black">
+              Edit Requirement
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Sirf details aur images edit hongi. Dono required hain.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={
+              onClose
+            }
+            className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X size={19} />
+          </button>
+        </div>
+
+        <div className="mt-6">
+          <label className="mb-2 block text-sm font-bold">
+            Details
+            <span className="ml-1 text-red-500">
+              *
+            </span>
+          </label>
+
+          <textarea
+            rows={7}
+            value={
+              details
+            }
+            onChange={(
+              event
+            ) =>
+              setDetails(
+                event.target.value
+              )
+            }
+            className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
+            placeholder="Requirement details..."
+          />
+        </div>
+
+        <div className="mt-6">
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-sm font-bold">
+              Images
+              <span className="ml-1 text-red-500">
+                *
+              </span>
+            </label>
+
+            <span className="text-xs text-slate-400">
+              {images.length}/5
+            </span>
+          </div>
+
+          {images.length >
+            0 && (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {images.map(
+                (
+                  image,
+                  index
+                ) => (
+                  <div
+                    key={`${index}-${image.slice(0, 30)}`}
+                    className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                  >
+                    <img
+                      src={
+                        image
+                      }
+                      alt={`Requirement ${index + 1}`}
+                      className="h-32 w-full object-cover"
+                    />
+
+                    {index ===
+                      0 && (
+                      <span className="absolute left-2 top-2 rounded-full bg-slate-950/80 px-2 py-1 text-[10px] font-bold text-white">
+                        Cover
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setImages(
+                          (
+                            current
+                          ) =>
+                            current.filter(
+                              (
+                                _,
+                                imageIndex
+                              ) =>
+                                imageIndex !==
+                                index
+                            )
+                        )
+                      }
+                      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white text-slate-700 shadow"
+                    >
+                      <X
+                        size={14}
+                      />
+                    </button>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+
+          {images.length <
+            5 && (
+            <label className="mt-3 flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-600 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700">
+              Add Images
+
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={
+                  handleFiles
+                }
+                className="hidden"
+              />
+            </label>
+          )}
+        </div>
+
+        {error && (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+            {error}
+          </div>
+        )}
+
+        {requirement.status ===
+          "verified" && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-700">
+            Verified requirement edit karne ke baad dobara admin review mein jayegi.
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={
+              onClose
+            }
+            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              submit
+            }
+            className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-600"
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RequirementRow({
   item,
   inquiryCount,
-  onStartVerification,
+  onEdit,
   onToggleActivity,
 }: {
   item:
@@ -921,7 +1347,7 @@ function RequirementRow({
 
             {pending && (
               <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-600">
-                Verification Pending
+                Pending Admin Review
               </span>
             )}
 
@@ -982,22 +1408,19 @@ function RequirementRow({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {item.status ===
-            "ai_verification_pending" && (
-            <button
-              type="button"
-              onClick={
-                onStartVerification
-              }
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
-            >
-              <PhoneCall
-                size={16}
-              />
+          <button
+            type="button"
+            onClick={
+              onEdit
+            }
+            className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <Pencil
+              size={15}
+            />
 
-              Start Verification
-            </button>
-          )}
+            Edit
+          </button>
 
           {isVerified && (
             <>

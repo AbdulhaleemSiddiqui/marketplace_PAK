@@ -618,6 +618,21 @@ export default function Find() {
   ] = useState(false);
 
   const [
+    authRole,
+    setAuthRole,
+  ] = useState<"buyer" | "seller">("buyer");
+
+  const [
+    pendingAuthAction,
+    setPendingAuthAction,
+  ] = useState<"inquiry" | "requirement" | null>(null);
+
+  const [
+    pendingInquiryAfterAuth,
+    setPendingInquiryAfterAuth,
+  ] = useState<PublicRequirement | null>(null);
+
+  const [
     searchParams,
   ] =
     useSearchParams();
@@ -799,6 +814,25 @@ export default function Find() {
     useState("");
 
   const [
+    successReference,
+    setSuccessReference,
+  ] =
+    useState("");
+
+  useEffect(() => {
+    if (!successMessage) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSuccessMessage("");
+      setSuccessReference("");
+    }, 10_000);
+
+    return () => window.clearTimeout(timer);
+  }, [successMessage]);
+
+  const [
     refreshKey,
     setRefreshKey,
   ] =
@@ -872,11 +906,12 @@ export default function Find() {
       return;
     }
 
-    saveBuyerRequirement(
-      pending,
-      user,
-      "ai_verification_pending",
-    );
+    const savedRequirement =
+      saveBuyerRequirement(
+        pending,
+        user,
+        "admin_review_required",
+      );
 
     clearPendingRequirement();
 
@@ -888,8 +923,10 @@ export default function Find() {
       false,
     );
 
+    setSuccessReference(savedRequirement.id);
+
     setSuccessMessage(
-      "Requirement submitted. Verification pending.",
+      "Requirement submitted. Pending admin review.",
     );
 
     setRefreshKey(
@@ -1026,8 +1063,12 @@ export default function Find() {
               ),
 
             imageUrl:
+              requirement.fields.find(
+                (field) =>
+                  normalize(field.id).startsWith("image") &&
+                  Boolean(field.value),
+              )?.value ||
               getField([
-                "image",
                 "photo",
                 "image url",
                 "photo url",
@@ -1384,9 +1425,12 @@ export default function Find() {
         getCurrentUser();
 
       if (!user) {
-        navigate(
-          "/login?role=seller&returnUrl=/find",
+        setAuthRole("seller");
+        setPendingAuthAction("inquiry");
+        setPendingInquiryAfterAuth(
+          requirement,
         );
+        setShowAuthModal(true);
 
         return;
       }
@@ -1663,9 +1707,9 @@ export default function Find() {
         getCurrentUser();
 
       if (!user) {
-        navigate(
-          "/login?role=buyer&returnUrl=/find",
-        );
+        setAuthRole("buyer");
+        setPendingAuthAction("requirement");
+        setShowAuthModal(true);
 
         return;
       }
@@ -1691,11 +1735,12 @@ export default function Find() {
         return;
       }
 
-      saveBuyerRequirement(
-        requirementToSave,
-        user,
-        "ai_verification_pending",
-      );
+      const savedRequirement =
+        saveBuyerRequirement(
+          requirementToSave,
+          user,
+          "admin_review_required",
+        );
 
       clearPendingRequirement();
 
@@ -1713,8 +1758,10 @@ export default function Find() {
         false,
       );
 
+      setSuccessReference(savedRequirement.id);
+
       setSuccessMessage(
-        "Requirement submitted. Verification pending.",
+        "Requirement submitted. Pending admin review.",
       );
 
       setRefreshKey(
@@ -1747,11 +1794,12 @@ export default function Find() {
         return;
       }
 
-      saveBuyerRequirement(
-        pending,
-        verified,
-        "ai_verification_pending",
-      );
+      const savedRequirement =
+        saveBuyerRequirement(
+          pending,
+          verified,
+          "admin_review_required",
+        );
 
       clearPendingRequirement();
 
@@ -1771,8 +1819,10 @@ export default function Find() {
         null,
       );
 
+      setSuccessReference(savedRequirement.id);
+
       setSuccessMessage(
-        "Phone verified and requirement submitted.",
+        "Phone verified. Requirement submitted for admin review.",
       );
 
       setRefreshKey(
@@ -1850,12 +1900,17 @@ export default function Find() {
 
             {!currentUser ? (
              <button
-             type="button"
-             onClick={() => setShowAuthModal(true)}
-             className="ml-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white"
-           >
-             Sign In
-           </button>
+               type="button"
+               onClick={() => {
+                 setAuthRole("buyer");
+                 setPendingAuthAction(null);
+                 setPendingInquiryAfterAuth(null);
+                 setShowAuthModal(true);
+               }}
+               className="ml-2 rounded-xl border border-slate-950 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-sm transition hover:bg-slate-950 hover:text-white"
+             >
+               Login
+             </button>
             ) : (
               <div className="relative ml-2">
                 <button
@@ -2260,7 +2315,7 @@ export default function Find() {
             true,
           )
         }
-        className="fixed bottom-7 right-7 z-50 flex items-center gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-white shadow-2xl transition hover:-translate-y-1 hover:bg-blue-600"
+        className="fixed bottom-7 right-7 z-50 flex items-center gap-3 rounded-2xl border border-blue-400/50 bg-slate-950 px-4 py-3 text-white shadow-[0_0_18px_rgba(37,99,235,0.55),0_0_40px_rgba(37,99,235,0.25)] transition duration-300 hover:-translate-y-1 hover:bg-blue-600 hover:shadow-[0_0_24px_rgba(37,99,235,0.75),0_0_55px_rgba(37,99,235,0.35)]"
       >
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
           <Plus
@@ -2539,12 +2594,65 @@ export default function Find() {
       <AuthModal
         open={showAuthModal}
         initialMode="login"
-        initialRole="buyer"
-        onClose={() =>
-          setShowAuthModal(false)
+        initialRole={authRole}
+        lockRole={
+          pendingAuthAction !== null
         }
+        onClose={() => {
+          setShowAuthModal(false);
+          setPendingAuthAction(null);
+          setPendingInquiryAfterAuth(null);
+        }}
         onAuthenticated={(user) => {
           setCurrentUser(user);
+          setShowAuthModal(false);
+
+          if (
+            pendingAuthAction === "inquiry" &&
+            pendingInquiryAfterAuth
+          ) {
+            const requirement =
+              pendingInquiryAfterAuth;
+
+            setPendingAuthAction(null);
+            setPendingInquiryAfterAuth(null);
+
+            if (
+              user.role === "seller" &&
+              user.sellerVerificationStatus === "verified"
+            ) {
+              setInquiryRequirement(
+                requirement,
+              );
+            } else if (
+              user.role === "seller"
+            ) {
+              setSuccessMessage(
+                "Login successful. Seller verification complete karein before sending an inquiry.",
+              );
+              navigate("/profile");
+            }
+
+            return;
+          }
+
+          if (
+            pendingAuthAction === "requirement"
+          ) {
+            setPendingAuthAction(null);
+
+            if (
+              user.role === "buyer"
+            ) {
+              setShowAiComposer(false);
+
+              if (!user.phoneVerified) {
+                setShowOtp(true);
+              } else {
+                submitRequirement();
+              }
+            }
+          }
         }}
       />
 
@@ -2568,15 +2676,36 @@ export default function Find() {
       />
 
       {successMessage && (
-        <div className="fixed bottom-24 left-1/2 z-[110] -translate-x-1/2 rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-bold text-white shadow-xl">
-          <CheckCircle2
-            size={17}
-            className="mr-2 inline"
-          />
+        <div className="fixed left-1/2 top-24 z-[110] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-emerald-200 bg-white px-5 py-4 shadow-2xl">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <CheckCircle2 size={19} />
+            </div>
 
-          {
-            successMessage
-          }
+            <div className="min-w-0">
+              <p className="text-sm font-black text-slate-950">
+                {successMessage}
+              </p>
+
+              {successReference && (
+                <p className="mt-1 break-all text-xs font-semibold text-slate-500">
+                  Reference: {formatRequirementReference(successReference)}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSuccessMessage("");
+                setSuccessReference("");
+              }}
+              className="ml-auto rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Close notification"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -3778,18 +3907,6 @@ function AiComposer({
 
 
   const [
-    voiceLanguage,
-    setVoiceLanguage,
-  ] =
-    useState<
-      "roman-urdu" |
-      "urdu"
-    >(
-      "roman-urdu",
-    );
-
-
-  const [
     showValidation,
     setShowValidation,
   ] =
@@ -3832,10 +3949,7 @@ function AiComposer({
         new Recognition();
 
       recognition.lang =
-        voiceLanguage ===
-        "urdu"
-          ? "ur-PK"
-          : "en-PK";
+        "en-PK";
       recognition.interimResults =
         false;
       recognition.continuous =
@@ -4067,9 +4181,6 @@ function AiComposer({
               Add Requirement
             </h2>
 
-            <p className="mt-1 text-sm text-slate-500">
-              Product ya service describe karein.
-            </p>
           </div>
 
           <button
@@ -4104,42 +4215,6 @@ function AiComposer({
               Listening... bolain
             </div>
           )}
-
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold text-slate-500">
-                Voice Language
-              </p>
-
-              <p className="mt-0.5 text-[11px] text-slate-400">
-                Roman Urdu mode English script recognition try karta hai.
-              </p>
-            </div>
-
-            <select
-              value={
-                voiceLanguage
-              }
-              onChange={(
-                event,
-              ) =>
-                setVoiceLanguage(
-                  event.target.value as
-                    | "roman-urdu"
-                    | "urdu",
-                )
-              }
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold"
-            >
-              <option value="roman-urdu">
-                Roman Urdu
-              </option>
-
-              <option value="urdu">
-                Urdu
-              </option>
-            </select>
-          </div>
 
           <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
 
@@ -4360,6 +4435,19 @@ function AiComposer({
                           ),
                         )}
                       </select>
+                    ) : normalize(
+                        field.id,
+                      ) ===
+                      "budget" ? (
+                      <BudgetRangeInput
+                        value={field.value}
+                        onChange={(value) =>
+                          onFieldChange(
+                            field.id,
+                            value,
+                          )
+                        }
+                      />
                     ) : (
                       <input
                         value={
@@ -4834,6 +4922,18 @@ function BasicModal({
 // HELPERS
 // ======================================================
 
+function formatRequirementReference(
+  id: string,
+) {
+  const shortId =
+    id
+      .replace(/-/g, "")
+      .slice(0, 8)
+      .toUpperCase();
+
+  return `KM-REQ-${shortId}`;
+}
+
 function normalize(
   value: string,
 ) {
@@ -5113,6 +5213,124 @@ function createField(
     value,
     required,
   };
+}
+
+function BudgetRangeInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const parsed =
+    value
+      .replace(/,/g, "")
+      .match(/\d+/g)
+      ?.map(Number) ?? [];
+
+  const [minBudget, setMinBudget] =
+    useState(
+      parsed.length >= 2
+        ? Math.min(parsed[0], parsed[1])
+        : 0,
+    );
+
+  const [maxBudget, setMaxBudget] =
+    useState(
+      parsed.length >= 2
+        ? Math.max(parsed[0], parsed[1])
+        : parsed.length === 1
+          ? parsed[0]
+          : MAX_RANGE,
+    );
+
+  const update = (
+    nextMin: number,
+    nextMax: number,
+  ) => {
+    const safeMin = Math.min(nextMin, nextMax);
+    const safeMax = Math.max(nextMin, nextMax);
+
+    setMinBudget(safeMin);
+    setMaxBudget(safeMax);
+
+    onChange(
+      `${formatRangeValue(safeMin)} - ${formatRangeValue(safeMax)}`,
+    );
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-4 flex items-center justify-between gap-3 text-xs font-bold text-slate-700">
+        <span>{formatRangeValue(minBudget)}</span>
+        <span>{formatRangeValue(maxBudget)}</span>
+      </div>
+
+      <div className="relative h-7">
+        <div className="absolute left-0 right-0 top-3 h-1.5 rounded-full bg-slate-200" />
+
+        <div
+          className="absolute top-3 h-1.5 rounded-full bg-blue-600"
+          style={{
+            left: `${(minBudget / MAX_RANGE) * 100}%`,
+            right: `${100 - (maxBudget / MAX_RANGE) * 100}%`,
+          }}
+        />
+
+        <input
+          type="range"
+          min={0}
+          max={MAX_RANGE}
+          step={100_000}
+          value={minBudget}
+          onChange={(event) =>
+            update(
+              Math.min(Number(event.target.value), maxBudget),
+              maxBudget,
+            )
+          }
+          className="pointer-events-none absolute inset-0 h-7 w-full appearance-none bg-transparent
+            [&::-webkit-slider-runnable-track]:h-1.5
+            [&::-webkit-slider-runnable-track]:bg-transparent
+            [&::-webkit-slider-thumb]:pointer-events-auto
+            [&::-webkit-slider-thumb]:mt-[-5px]
+            [&::-webkit-slider-thumb]:h-4
+            [&::-webkit-slider-thumb]:w-4
+            [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:rounded-full
+            [&::-webkit-slider-thumb]:border-2
+            [&::-webkit-slider-thumb]:border-blue-600
+            [&::-webkit-slider-thumb]:bg-white"
+        />
+
+        <input
+          type="range"
+          min={0}
+          max={MAX_RANGE}
+          step={100_000}
+          value={maxBudget}
+          onChange={(event) =>
+            update(
+              minBudget,
+              Math.max(Number(event.target.value), minBudget),
+            )
+          }
+          className="pointer-events-none absolute inset-0 h-7 w-full appearance-none bg-transparent
+            [&::-webkit-slider-runnable-track]:h-1.5
+            [&::-webkit-slider-runnable-track]:bg-transparent
+            [&::-webkit-slider-thumb]:pointer-events-auto
+            [&::-webkit-slider-thumb]:mt-[-5px]
+            [&::-webkit-slider-thumb]:h-4
+            [&::-webkit-slider-thumb]:w-4
+            [&::-webkit-slider-thumb]:appearance-none
+            [&::-webkit-slider-thumb]:rounded-full
+            [&::-webkit-slider-thumb]:border-2
+            [&::-webkit-slider-thumb]:border-blue-600
+            [&::-webkit-slider-thumb]:bg-white"
+        />
+      </div>
+    </div>
+  );
 }
 
 function generateMockRequirement(
@@ -5671,7 +5889,7 @@ function generateMockRequirement(
     title:
       looksLikeService
         ? "Service Required"
-        : "Product / Requirement",
+        : "Requirement",
     category:
       "General",
     requirementType:
