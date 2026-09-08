@@ -22,7 +22,7 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-
+import AuthModal from "../components/auth/AuthModal";
 import {
   useEffect,
   useMemo,
@@ -255,6 +255,7 @@ function toInquiryModalRequirement(
   };
 }
 
+// Auth modal state is declared inside Find().
 // ======================================================
 // DEMO REQUIREMENTS
 // ======================================================
@@ -610,6 +611,11 @@ const MAX_RANGE =
 export default function Find() {
   const navigate =
     useNavigate();
+
+  const [
+    showAuthModal,
+    setShowAuthModal,
+  ] = useState(false);
 
   const [
     searchParams,
@@ -1843,12 +1849,13 @@ export default function Find() {
             </HeaderIcon>
 
             {!currentUser ? (
-              <Link
-                to="/login"
-                className="ml-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white"
-              >
-                Sign In
-              </Link>
+             <button
+             type="button"
+             onClick={() => setShowAuthModal(true)}
+             className="ml-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white"
+           >
+             Sign In
+           </button>
             ) : (
               <div className="relative ml-2">
                 <button
@@ -2528,6 +2535,18 @@ export default function Find() {
           </div>
         </BasicModal>
       )}
+
+      <AuthModal
+        open={showAuthModal}
+        initialMode="login"
+        initialRole="buyer"
+        onClose={() =>
+          setShowAuthModal(false)
+        }
+        onAuthenticated={(user) => {
+          setCurrentUser(user);
+        }}
+      />
 
       <FastVerificationModal
         open={
@@ -5676,3 +5695,4 @@ function generateMockRequirement(
     ],
   };
 }
+

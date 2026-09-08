@@ -6,6 +6,10 @@ import type {
   User,
 } from "../types/auth";
 
+import type {
+  UserRole,
+} from "../types/marketplace";
+
 const USERS_KEY =
   "khoj_market_users";
 
@@ -48,54 +52,101 @@ function safeUser(
   return safe;
 }
 
-// =====================================================
-// REGISTER
-// =====================================================
+function normalizePhone(
+  value: string
+) {
+  const digits =
+    value.replace(/\D/g, "");
 
-export function registerUser(
-  request: RegisterRequest
-): User {
+  if (
+    digits.startsWith("92")
+  ) {
+    return digits;
+  }
+
+  if (
+    digits.startsWith("0")
+  ) {
+    return `92${digits.slice(1)}`;
+  }
+
+  return `92${digits}`;
+}
+
+function createUser({
+  role,
+  name,
+  email,
+  phone,
+  password,
+}: {
+  role: UserRole;
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+}): User {
   const users = getUsers();
 
-  const email =
-    request.email
-      .trim()
-      .toLowerCase();
+  const normalizedEmail =
+    email.trim().toLowerCase();
 
-  const existing =
-    users.find(
-      (item) =>
-        item.email.toLowerCase() ===
-        email
-    );
+  const normalizedPhone =
+    phone
+      ? normalizePhone(phone)
+      : "";
 
-  if (existing) {
-    throw new Error(
-      "Email already registered."
-    );
+  if (normalizedEmail) {
+    const emailExists =
+      users.some(
+        (item) =>
+          item.email
+            .toLowerCase() ===
+          normalizedEmail
+      );
+
+    if (emailExists) {
+      throw new Error(
+        "Email already registered."
+      );
+    }
+  }
+
+  if (normalizedPhone) {
+    const phoneExists =
+      users.some(
+        (item) =>
+          normalizePhone(
+            item.phone
+          ) === normalizedPhone
+      );
+
+    if (phoneExists) {
+      throw new Error(
+        "Phone number already registered."
+      );
+    }
   }
 
   const newUser: StoredUser = {
     id: crypto.randomUUID(),
 
     name:
-      request.name.trim(),
+      name.trim() ||
+      "KhojMarket User",
 
-    email,
+    email: normalizedEmail,
 
-    phone:
-      request.phone.trim(),
+    phone: normalizedPhone,
 
-    password:
-      request.password,
+    password,
 
-    role:
-      request.role,
+    role,
 
     phoneVerified: false,
 
     sellerVerificationStatus:
-      request.role === "seller"
+      role === "seller"
         ? "not_started"
         : undefined,
 
@@ -104,7 +155,6 @@ export function registerUser(
   };
 
   users.push(newUser);
-
   saveUsers(users);
 
   const user =
@@ -119,7 +169,133 @@ export function registerUser(
 }
 
 // =====================================================
-// LOGIN
+// REGISTER - EXISTING
+// =====================================================
+
+export function registerUser(
+  request: RegisterRequest
+): User {
+  return createUser({
+    role: request.role,
+    name: request.name,
+    email: request.email,
+    phone: request.phone,
+    password: request.password,
+  });
+}
+
+// =====================================================
+// SHORT SIGN-UP
+// =====================================================
+
+export function registerUserWithEmail({
+  role,
+  email,
+  password,
+}: {
+  role: UserRole;
+  email: string;
+  password: string;
+}): User {
+  const normalizedEmail =
+    email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    throw new Error(
+      "Email is required."
+    );
+  }
+
+  return createUser({
+    role,
+    name: "KhojMarket User",
+    email: normalizedEmail,
+    phone: "",
+    password,
+  });
+}
+
+export function registerUserWithPhone({
+  role,
+  phone,
+  password,
+}: {
+  role: UserRole;
+  phone: string;
+  password: string;
+}): User {
+  const normalizedPhone =
+    normalizePhone(phone);
+
+  if (
+    normalizedPhone.length < 12
+  ) {
+    throw new Error(
+      "Valid Pakistan phone number enter karein."
+    );
+  }
+
+  /*
+    StoredUser currently expects an email string.
+    For phone-only demo accounts we keep a private local
+    placeholder email. This is not shown to the user.
+  */
+  const placeholderEmail =
+    `phone-${normalizedPhone}@khojmarket.local`;
+
+  return createUser({
+    role,
+    name: "KhojMarket User",
+    email: placeholderEmail,
+    phone: normalizedPhone,
+    password,
+  });
+}
+
+// =====================================================
+// GOOGLE - PHASE 1 DEMO
+// =====================================================
+
+export function continueWithGoogleDemo(
+  role: UserRole
+): User {
+  const users = getUsers();
+
+  const demoEmail =
+    `google-demo-${role}@khojmarket.local`;
+
+  const existing =
+    users.find(
+      (item) =>
+        item.email.toLowerCase() ===
+          demoEmail &&
+        item.role === role
+    );
+
+  if (existing) {
+    const user =
+      safeUser(existing);
+
+    localStorage.setItem(
+      CURRENT_USER_KEY,
+      JSON.stringify(user)
+    );
+
+    return user;
+  }
+
+  return createUser({
+    role,
+    name: "Google User",
+    email: demoEmail,
+    phone: "",
+    password:
+      `demo-${crypto.randomUUID()}`,
+  });
+}
+
+// =====================================================
+// LOGIN - EMAIL
 // =====================================================
 
 export function loginUser(
@@ -146,6 +322,51 @@ export function loginUser(
   if (!user) {
     throw new Error(
       `Invalid ${request.role} login details.`
+    );
+  }
+
+  const safe =
+    safeUser(user);
+
+  localStorage.setItem(
+    CURRENT_USER_KEY,
+    JSON.stringify(safe)
+  );
+
+  return safe;
+}
+
+// =====================================================
+// LOGIN - PHONE
+// =====================================================
+
+export function loginUserByPhone({
+  phone,
+  password,
+  role,
+}: {
+  phone: string;
+  password: string;
+  role: UserRole;
+}): User {
+  const users = getUsers();
+
+  const normalizedPhone =
+    normalizePhone(phone);
+
+  const user =
+    users.find(
+      (item) =>
+        normalizePhone(
+          item.phone
+        ) === normalizedPhone &&
+        item.password === password &&
+        item.role === role
+    );
+
+  if (!user) {
+    throw new Error(
+      `Invalid ${role} phone login details.`
     );
   }
 
