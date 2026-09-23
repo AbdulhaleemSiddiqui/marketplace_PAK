@@ -41,20 +41,27 @@ import {
 } from "../services/authService";
 
 import {
-  getCreditBalance,
-  getCreditTransactionsByUser,
-} from "../services/creditService";
+  getBuyerInquiriesForRequirement,
+  acceptBuyerInquiry,
+  rejectBuyerInquiry,
+} from "../services/buyerInquiryApiService";
 
 import {
-  getBuyerInquiries,
-  getSellerInquiries,
-  updateInquiryStatus,
-} from "../services/inquiryService";
+  getSellerWallet,
+  getSellerWalletTransactions,
+  getSellerInquiriesApi,
+  type SellerWalletTransaction,
+} from "../services/sellerProfileApiService";
 
 import {
   getBuyerRequirementsByUser,
   updateBuyerRequirementContent,
 } from "../services/requirementService";
+
+import {
+  getMyRequirements,
+  type RequirementListItem,
+} from "../services/requirementApiService";
 
 import type {
   SavedBuyerRequirement,
@@ -72,6 +79,32 @@ export default function Profile() {
     refreshKey,
     setRefreshKey,
   ] = useState(0);
+
+  const [
+    requirements,
+    setRequirements,
+  ] = useState<RequirementListItem[]>([]);
+
+  const [
+    requirementsLoading,
+    setRequirementsLoading,
+  ] = useState(false);
+
+  const [
+    requirementsError,
+    setRequirementsError,
+  ] = useState("");
+
+  const [buyerInquiries, setBuyerInquiries] = useState<SellerInquiry[]>([]);
+  const [buyerInquiriesLoading, setBuyerInquiriesLoading] = useState(false);
+  const [buyerInquiriesError, setBuyerInquiriesError] = useState("");
+
+
+  const [sellerCreditBalance, setSellerCreditBalance] = useState(0);
+  const [sellerInquiries, setSellerInquiries] = useState<SellerInquiry[]>([]);
+  const [creditTransactions, setCreditTransactions] =
+    useState<SellerWalletTransaction[]>([]);
+  const [sellerDataError, setSellerDataError] = useState("");
 
 
   const [
@@ -108,6 +141,170 @@ const [
 
   const user =
     getCurrentUser();
+
+  useEffect(() => {
+    if (!user || user.role !== "buyer") {
+      setRequirements([]);
+      setRequirementsError("");
+      setRequirementsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRequirements = async () => {
+      try {
+        setRequirementsLoading(true);
+        setRequirementsError("");
+
+        const response = await getMyRequirements({
+          page: 1,
+          pageSize: 50,
+        });
+
+        if (!cancelled) {
+          setRequirements(response.items ?? []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRequirementsError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load your requirements.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setRequirementsLoading(false);
+        }
+      }
+    };
+
+    void loadRequirements();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.role, refreshKey]);
+
+  useEffect(() => {
+    if (!user || user.role !== "buyer") {
+      setBuyerInquiries([]);
+      setBuyerInquiriesError("");
+      setBuyerInquiriesLoading(false);
+      return;
+    }
+
+    if (requirementsLoading) return;
+
+    if (requirements.length === 0) {
+      setBuyerInquiries([]);
+      setBuyerInquiriesError("");
+      setBuyerInquiriesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadBuyerInquiries = async () => {
+      setBuyerInquiriesLoading(true);
+      setBuyerInquiriesError("");
+
+      const results = await Promise.allSettled(
+        requirements.map((requirement) =>
+          getBuyerInquiriesForRequirement(requirement.id),
+        ),
+      );
+
+      if (cancelled) return;
+
+      const merged = results.flatMap((result) =>
+        result.status === "fulfilled" ? result.value ?? [] : [],
+      );
+
+      const unique = Array.from(
+        new Map(merged.map((inquiry) => [inquiry.id, inquiry])).values(),
+      ).sort(
+        (a, b) =>
+          new Date(b.createdAt ?? 0).getTime() -
+          new Date(a.createdAt ?? 0).getTime(),
+      );
+
+      setBuyerInquiries(unique);
+
+      const failed = results.filter((result) => result.status === "rejected");
+      if (failed.length === results.length) {
+        const reason = failed[0]?.reason;
+        setBuyerInquiriesError(
+          reason instanceof Error
+            ? reason.message
+            : "Unable to load seller inquiries.",
+        );
+      } else if (failed.length > 0) {
+        setBuyerInquiriesError(
+          "Some seller inquiries could not be loaded. Please refresh.",
+        );
+      }
+
+      setBuyerInquiriesLoading(false);
+    };
+
+    void loadBuyerInquiries();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user?.id,
+    user?.role,
+    requirements,
+    requirementsLoading,
+    refreshKey,
+  ]);
+
+  useEffect(() => {
+    if (!user || user.role !== "seller") {
+      setSellerCreditBalance(0);
+      setSellerInquiries([]);
+      setCreditTransactions([]);
+      setSellerDataError("");
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSellerProfileData = async () => {
+      try {
+        setSellerDataError("");
+
+        const [wallet, transactions, inquiries] = await Promise.all([
+          getSellerWallet(),
+          getSellerWalletTransactions(),
+          getSellerInquiriesApi(),
+        ]);
+
+        if (cancelled) return;
+
+        setSellerCreditBalance(wallet.balance ?? 0);
+        setCreditTransactions(transactions ?? []);
+        setSellerInquiries(inquiries ?? []);
+      } catch (error) {
+        if (!cancelled) {
+          setSellerDataError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load seller data.",
+          );
+        }
+      }
+    };
+
+    void loadSellerProfileData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.role, refreshKey]);
 
   // =====================================================
   // SUCCESS
@@ -151,16 +348,9 @@ const [
   // BUYER
   // =====================================================
 
-  const requirements =
+  const legacyRequirements =
     isBuyer
       ? getBuyerRequirementsByUser(
-          user.id
-        )
-      : [];
-
-  const buyerInquiries =
-    isBuyer
-      ? getBuyerInquiries(
           user.id
         )
       : [];
@@ -173,14 +363,8 @@ const [
   const pendingCount =
     requirements.filter(
       (item) =>
-        [
-          "phone_verification_pending",
-          "phone_verified",
-          "ai_verification_pending",
-          "admin_review_required",
-        ].includes(
-          item.status
-        )
+        item.status ===
+        "admin_review_required"
     ).length;
 
   const verifiedCount =
@@ -201,26 +385,10 @@ const [
   // SELLER
   // =====================================================
 
-  const sellerInquiries =
-    isSeller
-      ? getSellerInquiries(
-          user.id
-        )
-      : [];
-
   const creditBalance =
     isSeller
-      ? getCreditBalance(
-          user.id
-        )
+      ? sellerCreditBalance
       : 0;
-
-  const creditTransactions =
-    isSeller
-      ? getCreditTransactionsByUser(
-          user.id
-        )
-      : [];
 
   const sellerVerified =
     user.sellerVerificationStatus ===
@@ -320,27 +488,31 @@ const [
     }
   };
 
-  const handleInquiryAction = (
+  const handleInquiryAction = async (
     inquiryId: string,
-    status:
-      | "accepted"
-      | "rejected"
+    status: "accepted" | "rejected",
   ) => {
-    updateInquiryStatus(
-      inquiryId,
-      status
-    );
+    try {
+      if (status === "accepted") {
+        await acceptBuyerInquiry(inquiryId);
+      } else {
+        await rejectBuyerInquiry(inquiryId);
+      }
 
-    setSuccessMessage(
-      status === "accepted"
-        ? "Seller inquiry accepted."
-        : "Seller inquiry rejected."
-    );
+      setSuccessMessage(
+        status === "accepted"
+          ? "Seller inquiry accepted."
+          : "Seller inquiry rejected.",
+      );
 
-    setRefreshKey(
-      (value) =>
-        value + 1
-    );
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to update seller inquiry.",
+      );
+    }
   };
 
   const handleSellerVerification = (
@@ -572,41 +744,52 @@ const [
               title="My Requirements"
               subtitle="Aapki buyer requirement history"
             >
-              {requirements.length ===
-              0 ? (
+              {requirementsLoading ? (
+                <div className="py-14 text-center text-sm text-slate-400">
+                  Requirements loading...
+                </div>
+              ) : requirementsError ? (
+                <div className="py-14 text-center text-sm font-semibold text-red-500">
+                  {requirementsError}
+                </div>
+              ) : requirements.length === 0 ? (
                 <EmptyHistory
                   text="Abhi koi buyer requirement nahi hai."
                 />
               ) : (
-                requirements.map(
-                  (item) => (
+                requirements.map((item) => {
+                  const legacyItem =
+                    legacyRequirements.find(
+                      (legacy) =>
+                        legacy.id === item.id
+                    );
+
+                  return (
                     <RequirementRow
-                      key={
-                        item.id
-                      }
-                      item={
-                        item
-                      }
+                      key={item.id}
+                      item={item}
                       inquiryCount={
-                        buyerInquiries.filter(
-                          (inquiry) =>
-                            inquiry.requirementId ===
-                            item.id
-                        ).length
+                        item.inquiryCount ?? 0
                       }
-                      onEdit={() =>
-                        setEditingRequirement(
-                          item
-                        )
+                      onEdit={
+                        legacyItem
+                          ? () =>
+                              setEditingRequirement(
+                                legacyItem
+                              )
+                          : undefined
                       }
-onToggleActivity={() =>
-                        handleToggleRequirementActivity(
-                          item
-                        )
+                      onToggleActivity={
+                        legacyItem
+                          ? () =>
+                              handleToggleRequirementActivity(
+                                legacyItem
+                              )
+                          : undefined
                       }
                     />
-                  )
-                )
+                  );
+                })
               )}
             </HistoryCard>
 
@@ -616,36 +799,39 @@ onToggleActivity={() =>
               title="Seller Inquiries"
               subtitle="Aapki requirements par sellers ki offers"
             >
-              {buyerInquiries.length ===
-              0 ? (
+              {buyerInquiriesLoading ? (
+                <div className="py-14 text-center text-sm text-slate-400">
+                  Seller inquiries loading...
+                </div>
+              ) : buyerInquiriesError && buyerInquiries.length === 0 ? (
+                <div className="py-14 text-center text-sm font-semibold text-red-500">
+                  {buyerInquiriesError}
+                </div>
+              ) : buyerInquiries.length === 0 ? (
                 <EmptyHistory
                   text="Abhi koi seller inquiry receive nahi hui."
                 />
               ) : (
-                buyerInquiries.map(
-                  (inquiry) => (
+                <>
+                  {buyerInquiriesError && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+                      {buyerInquiriesError}
+                    </div>
+                  )}
+
+                  {buyerInquiries.map((inquiry) => (
                     <BuyerInquiryCard
-                      key={
-                        inquiry.id
-                      }
-                      inquiry={
-                        inquiry
-                      }
+                      key={inquiry.id}
+                      inquiry={inquiry}
                       onAccept={() =>
-                        handleInquiryAction(
-                          inquiry.id,
-                          "accepted"
-                        )
+                        void handleInquiryAction(inquiry.id, "accepted")
                       }
                       onReject={() =>
-                        handleInquiryAction(
-                          inquiry.id,
-                          "rejected"
-                        )
+                        void handleInquiryAction(inquiry.id, "rejected")
                       }
                     />
-                  )
-                )
+                  ))}
+                </>
               )}
             </HistoryCard>
           </>
@@ -657,6 +843,11 @@ onToggleActivity={() =>
 
         {isSeller && (
           <>
+            {sellerDataError && (
+              <div className="mt-8 rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-semibold text-red-600">
+                {sellerDataError}
+              </div>
+            )}
             {!sellerVerified && (
               <div className="mt-8 rounded-3xl border border-amber-200 bg-amber-50 p-6">
                 <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
@@ -1307,15 +1498,14 @@ function RequirementRow({
   onEdit,
   onToggleActivity,
 }: {
-  item:
-    SavedBuyerRequirement;
+  item: RequirementListItem;
 
   inquiryCount: number;
 
-  onStartVerification:
+  onEdit?:
     () => void;
 
-  onToggleActivity:
+  onToggleActivity?:
     () => void;
 }) {
   const pending =
@@ -1379,6 +1569,10 @@ function RequirementRow({
             )}
           </div>
 
+          <p className="mt-2 text-xs font-semibold text-slate-400">
+            {item.referenceNo}
+          </p>
+
           <p className="mt-2 text-sm text-slate-500">
             {item.category}
 
@@ -1386,6 +1580,14 @@ function RequirementRow({
               ? ` • ${item.subCategory}`
               : ""}
           </p>
+
+          {(item.city || item.country) && (
+            <p className="mt-1 text-sm text-slate-500">
+              {[item.city, item.country]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+          )}
 
           <div className="mt-3 flex items-center gap-2 text-sm font-semibold text-blue-600">
             <MessageCircle
@@ -1408,19 +1610,21 @@ function RequirementRow({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={
-              onEdit
-            }
-            className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-          >
-            <Pencil
-              size={15}
-            />
+          {onEdit && (
+            <button
+              type="button"
+              onClick={
+                onEdit
+              }
+              className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+            >
+              <Pencil
+                size={15}
+              />
 
-            Edit
-          </button>
+              Edit
+            </button>
+          )}
 
           {isVerified && (
             <>
@@ -1431,21 +1635,23 @@ function RequirementRow({
                 View Public Post
               </Link>
 
-              <button
-                type="button"
-                onClick={
-                  onToggleActivity
-                }
-                className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-                  isActive
-                    ? "border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-                    : "bg-emerald-600 text-white hover:bg-emerald-700"
-                }`}
-              >
-                {isActive
-                  ? "Make Inactive"
-                  : "Make Active"}
-              </button>
+              {onToggleActivity && (
+                <button
+                  type="button"
+                  onClick={
+                    onToggleActivity
+                  }
+                  className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                    isActive
+                      ? "border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                      : "bg-emerald-600 text-white hover:bg-emerald-700"
+                  }`}
+                >
+                  {isActive
+                    ? "Make Inactive"
+                    : "Make Active"}
+                </button>
+              )}
             </>
           )}
         </div>

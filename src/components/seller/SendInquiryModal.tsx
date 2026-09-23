@@ -23,6 +23,7 @@ import {
     currentBalance: number;
   
     inquiryCost: number;
+    submitting?: boolean;
   
     onClose: () => void;
   
@@ -37,6 +38,7 @@ import {
     requirement,
     currentBalance,
     inquiryCost,
+    submitting = false,
     onClose,
     onConfirm,
   }: Props) {
@@ -62,6 +64,7 @@ import {
       inquiryCost;
   
     const handleSubmit = () => {
+      if (submitting) return;
       if (!message.trim()) {
         alert(
           "Please enter your message."
@@ -134,6 +137,7 @@ import {
             <button
               type="button"
               onClick={onClose}
+              disabled={submitting}
               className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100"
             >
               <X size={20} />
@@ -268,7 +272,7 @@ import {
             <button
               type="button"
               disabled={
-                !enoughCredits
+                !enoughCredits || submitting
               }
               onClick={
                 handleSubmit

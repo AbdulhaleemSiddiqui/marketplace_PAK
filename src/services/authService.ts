@@ -1,8 +1,13 @@
+import {
+  apiRequest,
+  clearAccessToken,
+  setAccessToken,
+} from "./apiClient";
+
 import type {
   LoginRequest,
   RegisterRequest,
   SellerVerificationStatus,
-  StoredUser,
   User,
 } from "../types/auth";
 
@@ -10,50 +15,85 @@ import type {
   UserRole,
 } from "../types/marketplace";
 
-const USERS_KEY =
-  "khoj_market_users";
-
 const CURRENT_USER_KEY =
   "khoj_market_current_user";
 
-// =====================================================
-// USERS
-// =====================================================
-
-function getUsers(): StoredUser[] {
-  try {
-    return JSON.parse(
-      localStorage.getItem(
-        USERS_KEY
-      ) || "[]"
-    );
-  } catch {
-    return [];
-  }
+interface ApiAuthUser {
+  id: string;
+  referenceNo?: string | null;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role: UserRole;
+  phoneVerified: boolean;
+  sellerVerificationStatus?:
+    | SellerVerificationStatus
+    | null;
 }
 
-function saveUsers(
-  users: StoredUser[]
+interface AuthResponse {
+  token: string;
+  expiresAt: string;
+  user: ApiAuthUser;
+}
+
+function toFrontendUser(
+  apiUser: ApiAuthUser,
+): User {
+  return {
+    id: apiUser.id,
+    referenceNo:
+      apiUser.referenceNo ??
+      undefined,
+    name:
+      apiUser.name ??
+      "KhojMarket User",
+    email:
+      apiUser.email ??
+      "",
+    phone:
+      apiUser.phone ??
+      "",
+    role:
+      apiUser.role,
+    phoneVerified:
+      apiUser.phoneVerified,
+    sellerVerificationStatus:
+      apiUser.sellerVerificationStatus ??
+      undefined,
+    createdAt:
+      new Date().toISOString(),
+  } as User;
+}
+
+function saveCurrentUser(
+  user: User,
 ) {
   localStorage.setItem(
-    USERS_KEY,
-    JSON.stringify(users)
+    CURRENT_USER_KEY,
+    JSON.stringify(user),
   );
 }
 
-function safeUser(
-  user: StoredUser
-): User {
-  const {
-    password: _password,
-    ...safe
-  } = user;
+function saveAuthResponse(
+  response: AuthResponse,
+) {
+  setAccessToken(
+    response.token,
+  );
 
-  return safe;
+  const user =
+    toFrontendUser(
+      response.user,
+    );
+
+  saveCurrentUser(user);
+
+  return user;
 }
 
 function normalizePhone(
-  value: string
+  value: string,
 ) {
   const digits =
     value.replace(/\D/g, "");
@@ -61,161 +101,79 @@ function normalizePhone(
   if (
     digits.startsWith("92")
   ) {
-    return digits;
+    return `+${digits}`;
   }
 
   if (
     digits.startsWith("0")
   ) {
-    return `92${digits.slice(1)}`;
+    return `+92${digits.slice(1)}`;
   }
 
-  return `92${digits}`;
+  return `+92${digits}`;
 }
 
-function createUser({
-  role,
-  name,
-  email,
-  phone,
-  password,
-}: {
-  role: UserRole;
-  name: string;
-  email: string;
-  phone: string;
-  password: string;
-}): User {
-  const users = getUsers();
+function phonePlaceholderEmail(
+  phone: string,
+) {
+  const digits =
+    normalizePhone(phone)
+      .replace(/\D/g, "");
 
-  const normalizedEmail =
-    email.trim().toLowerCase();
-
-  const normalizedPhone =
-    phone
-      ? normalizePhone(phone)
-      : "";
-
-  if (normalizedEmail) {
-    const emailExists =
-      users.some(
-        (item) =>
-          item.email
-            .toLowerCase() ===
-          normalizedEmail
-      );
-
-    if (emailExists) {
-      throw new Error(
-        "Email already registered."
-      );
-    }
-  }
-
-  if (normalizedPhone) {
-    const phoneExists =
-      users.some(
-        (item) =>
-          normalizePhone(
-            item.phone
-          ) === normalizedPhone
-      );
-
-    if (phoneExists) {
-      throw new Error(
-        "Phone number already registered."
-      );
-    }
-  }
-
-  const newUser: StoredUser = {
-    id: crypto.randomUUID(),
-
-    name:
-      name.trim() ||
-      "KhojMarket User",
-
-    email: normalizedEmail,
-
-    phone: normalizedPhone,
-
-    password,
-
-    role,
-
-    phoneVerified: false,
-
-    sellerVerificationStatus:
-      role === "seller"
-        ? "not_started"
-        : undefined,
-
-    createdAt:
-      new Date().toISOString(),
-  };
-
-  users.push(newUser);
-  saveUsers(users);
-
-  const user =
-    safeUser(newUser);
-
-  localStorage.setItem(
-    CURRENT_USER_KEY,
-    JSON.stringify(user)
-  );
-
-  return user;
+  return `phone-${digits}@khojmarket.local`;
 }
 
-// =====================================================
-// REGISTER - EXISTING
-// =====================================================
-
-export function registerUser(
-  request: RegisterRequest
-): User {
-  return createUser({
-    role: request.role,
-    name: request.name,
-    email: request.email,
-    phone: request.phone,
-    password: request.password,
-  });
-}
-
-// =====================================================
-// SHORT SIGN-UP
-// =====================================================
-
-export function registerUserWithEmail({
-  role,
-  email,
-  password,
-}: {
-  role: UserRole;
-  email: string;
-  password: string;
-}): User {
-  const normalizedEmail =
-    email.trim().toLowerCase();
-
-  if (!normalizedEmail) {
-    throw new Error(
-      "Email is required."
+export async function registerUser(
+  request: RegisterRequest,
+): Promise<User> {
+  const response =
+    await apiRequest<AuthResponse>(
+      "/api/auth/register",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name:
+            request.name?.trim() ||
+            "KhojMarket User",
+          email:
+            request.email.trim(),
+          phone:
+            request.phone?.trim() ||
+            "",
+          password:
+            request.password,
+          role:
+            request.role,
+        }),
+      },
     );
-  }
 
-  return createUser({
+  return saveAuthResponse(
+    response,
+  );
+}
+
+export async function registerUserWithEmail({
+  role,
+  email,
+  password,
+}: {
+  role: UserRole;
+  email: string;
+  password: string;
+}): Promise<User> {
+  return registerUser({
     role,
-    name: "KhojMarket User",
-    email: normalizedEmail,
+    name:
+      "KhojMarket User",
+    email:
+      email.trim(),
     phone: "",
     password,
-  });
+  } as RegisterRequest);
 }
 
-export function registerUserWithPhone({
+export async function registerUserWithPhone({
   role,
   phone,
   password,
@@ -223,124 +181,60 @@ export function registerUserWithPhone({
   role: UserRole;
   phone: string;
   password: string;
-}): User {
+}): Promise<User> {
   const normalizedPhone =
     normalizePhone(phone);
+
+  return registerUser({
+    role,
+    name:
+      "KhojMarket User",
+    email:
+      phonePlaceholderEmail(
+        normalizedPhone,
+      ),
+    phone:
+      normalizedPhone,
+    password,
+  } as RegisterRequest);
+}
+
+export async function loginUser(
+  request: LoginRequest,
+): Promise<User> {
+  const response =
+    await apiRequest<AuthResponse>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          email:
+            request.email
+              .trim()
+              .toLowerCase(),
+          password:
+            request.password,
+        }),
+      },
+    );
 
   if (
-    normalizedPhone.length < 12
+    response.user.role !==
+    request.role
   ) {
+    clearAccessToken();
+
     throw new Error(
-      "Valid Pakistan phone number enter karein."
+      `Ye account ${response.user.role} account hai. ${request.role} account select karein.`,
     );
   }
 
-  /*
-    StoredUser currently expects an email string.
-    For phone-only demo accounts we keep a private local
-    placeholder email. This is not shown to the user.
-  */
-  const placeholderEmail =
-    `phone-${normalizedPhone}@khojmarket.local`;
-
-  return createUser({
-    role,
-    name: "KhojMarket User",
-    email: placeholderEmail,
-    phone: normalizedPhone,
-    password,
-  });
-}
-
-// =====================================================
-// GOOGLE - PHASE 1 DEMO
-// =====================================================
-
-export function continueWithGoogleDemo(
-  role: UserRole
-): User {
-  const users = getUsers();
-
-  const demoEmail =
-    `google-demo-${role}@khojmarket.local`;
-
-  const existing =
-    users.find(
-      (item) =>
-        item.email.toLowerCase() ===
-          demoEmail &&
-        item.role === role
-    );
-
-  if (existing) {
-    const user =
-      safeUser(existing);
-
-    localStorage.setItem(
-      CURRENT_USER_KEY,
-      JSON.stringify(user)
-    );
-
-    return user;
-  }
-
-  return createUser({
-    role,
-    name: "Google User",
-    email: demoEmail,
-    phone: "",
-    password:
-      `demo-${crypto.randomUUID()}`,
-  });
-}
-
-// =====================================================
-// LOGIN - EMAIL
-// =====================================================
-
-export function loginUser(
-  request: LoginRequest
-): User {
-  const users = getUsers();
-
-  const email =
-    request.email
-      .trim()
-      .toLowerCase();
-
-  const user =
-    users.find(
-      (item) =>
-        item.email.toLowerCase() ===
-          email &&
-        item.password ===
-          request.password &&
-        item.role ===
-          request.role
-    );
-
-  if (!user) {
-    throw new Error(
-      `Invalid ${request.role} login details.`
-    );
-  }
-
-  const safe =
-    safeUser(user);
-
-  localStorage.setItem(
-    CURRENT_USER_KEY,
-    JSON.stringify(safe)
+  return saveAuthResponse(
+    response,
   );
-
-  return safe;
 }
 
-// =====================================================
-// LOGIN - PHONE
-// =====================================================
-
-export function loginUserByPhone({
+export async function loginUserByPhone({
   phone,
   password,
   role,
@@ -348,49 +242,41 @@ export function loginUserByPhone({
   phone: string;
   password: string;
   role: UserRole;
-}): User {
-  const users = getUsers();
-
-  const normalizedPhone =
-    normalizePhone(phone);
-
-  const user =
-    users.find(
-      (item) =>
-        normalizePhone(
-          item.phone
-        ) === normalizedPhone &&
-        item.password === password &&
-        item.role === role
+}): Promise<User> {
+  const response =
+    await apiRequest<AuthResponse>(
+      "/api/auth/login-phone",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          phone:
+            normalizePhone(phone),
+          password,
+        }),
+      },
     );
 
-  if (!user) {
+  if (
+    response.user.role !== role
+  ) {
+    clearAccessToken();
+
     throw new Error(
-      `Invalid ${role} phone login details.`
+      `Ye account ${response.user.role} account hai. ${role} account select karein.`,
     );
   }
 
-  const safe =
-    safeUser(user);
-
-  localStorage.setItem(
-    CURRENT_USER_KEY,
-    JSON.stringify(safe)
+  return saveAuthResponse(
+    response,
   );
-
-  return safe;
 }
-
-// =====================================================
-// CURRENT USER
-// =====================================================
 
 export function getCurrentUser():
   User | null {
   try {
     const value =
       localStorage.getItem(
-        CURRENT_USER_KEY
+        CURRENT_USER_KEY,
       );
 
     return value
@@ -401,54 +287,63 @@ export function getCurrentUser():
   }
 }
 
+export async function refreshCurrentUser():
+  Promise<User> {
+  const response =
+    await apiRequest<ApiAuthUser>(
+      "/api/auth/me",
+    );
+
+  const user =
+    toFrontendUser(
+      response,
+    );
+
+  saveCurrentUser(user);
+
+  return user;
+}
+
 export function logoutUser() {
+  clearAccessToken();
+
   localStorage.removeItem(
-    CURRENT_USER_KEY
+    CURRENT_USER_KEY,
   );
 }
 
-// =====================================================
-// PHONE VERIFY
-// =====================================================
-
+/*
+  Backward-compatible helper.
+  Do NOT use this to verify a phone.
+  Real verification must happen through /api/auth/otp/verify.
+*/
 export function markPhoneVerified(
-  userId: string
+  userId: string,
 ): User | null {
-  const users =
-    getUsers();
+  const current =
+    getCurrentUser();
 
-  const index =
-    users.findIndex(
-      (item) =>
-        item.id === userId
-    );
-
-  if (index < 0) {
+  if (
+    !current ||
+    current.id !== userId
+  ) {
     return null;
   }
 
-  users[index] = {
-    ...users[index],
+  const updated = {
+    ...current,
     phoneVerified: true,
-  };
+  } as User;
 
-  saveUsers(users);
-
-  const updated =
-    safeUser(users[index]);
-
-  localStorage.setItem(
-    CURRENT_USER_KEY,
-    JSON.stringify(updated)
-  );
+  saveCurrentUser(updated);
 
   return updated;
 }
 
-// =====================================================
-// SELLER VERIFICATION
-// =====================================================
-
+/*
+  These remain only for old UI compatibility.
+  Real seller verification is controlled by the backend/admin flow.
+*/
 export function updateSellerVerification({
   userId,
   status,
@@ -457,88 +352,64 @@ export function updateSellerVerification({
   businessCategory,
 }: {
   userId: string;
-
   status: SellerVerificationStatus;
-
   businessName?: string;
-
   businessCity?: string;
-
   businessCategory?: string;
 }): User | null {
-  const users =
-    getUsers();
-
-  const index =
-    users.findIndex(
-      (item) =>
-        item.id === userId
-    );
-
-  if (index < 0) {
-    return null;
-  }
+  const current =
+    getCurrentUser();
 
   if (
-    users[index].role !==
-    "seller"
+    !current ||
+    current.id !== userId ||
+    current.role !== "seller"
   ) {
     return null;
   }
 
-  users[index] = {
-    ...users[index],
-
+  const updated = {
+    ...current,
     sellerVerificationStatus:
       status,
-
     businessName:
       businessName ??
-      users[index].businessName,
-
+      (current as any)
+        .businessName,
     businessCity:
       businessCity ??
-      users[index].businessCity,
-
+      (current as any)
+        .businessCity,
     businessCategory:
       businessCategory ??
-      users[index]
+      (current as any)
         .businessCategory,
-  };
+  } as User;
 
-  saveUsers(users);
-
-  const updated =
-    safeUser(users[index]);
-
-  localStorage.setItem(
-    CURRENT_USER_KEY,
-    JSON.stringify(updated)
-  );
+  saveCurrentUser(updated);
 
   return updated;
 }
-
-// =====================================================
-// DEMO SELLER VERIFY
-// Later admin will approve this.
-// =====================================================
 
 export function verifySellerForDemo(
   userId: string,
   businessName: string,
   businessCity: string,
-  businessCategory: string
+  businessCategory: string,
 ) {
   return updateSellerVerification({
     userId,
-
     status: "verified",
-
     businessName,
-
     businessCity,
-
     businessCategory,
   });
+}
+
+export async function continueWithGoogleDemo(
+  _role: UserRole,
+): Promise<User> {
+  throw new Error(
+    "Google login abhi backend se connected nahi hai. Email ya Phone use karein.",
+  );
 }

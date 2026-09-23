@@ -329,7 +329,7 @@ export function updateBuyerRequirementContent(
           status: nextStatus,
 
           aiVerified:
-            nextStatus === "verified",
+            false,
 
           updatedAt:
             new Date().toISOString(),

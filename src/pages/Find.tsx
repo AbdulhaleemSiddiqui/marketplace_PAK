@@ -24,6 +24,13 @@ import {
 } from "lucide-react";
 import AuthModal from "../components/auth/AuthModal";
 import {
+  createRequirement,
+} from "../services/requirementCreateApiService.ts";
+import {
+  sendSellerInquiry,
+} from "../services/inquiryApiService.ts";
+import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -38,32 +45,30 @@ import {
   useSearchParams,
 } from "react-router-dom";
 
-import FastVerificationModal from "../components/auth/FastVerificationModal";
+import PhoneOtpModal from "../components/auth/PhoneOtpModal";
 import SendInquiryModal from "../components/seller/SendInquiryModal";
 
 import {
   getCurrentUser,
   logoutUser,
-  markPhoneVerified,
+  refreshCurrentUser,
 } from "../services/authService";
 
 import {
-  getCreditBalance,
-} from "../services/creditService";
-
-import {
-  DEFAULT_INQUIRY_COST,
-  getInquiryCountByRequirement,
-  sendInquiry,
-} from "../services/inquiryService";
+  getSellerWallet,
+} from "../services/sellerProfileApiService";
 
 import {
   clearPendingRequirement,
   getPendingRequirement,
-  getVerifiedBuyerRequirements,
-  saveBuyerRequirement,
   savePendingRequirement,
 } from "../services/requirementService";
+
+import {
+  getPublicRequirements,
+  getRequirementImageUrl,
+  type RequirementListItem,
+} from "../services/requirementApiService";
 
 import {
   getCitiesByCountry,
@@ -76,7 +81,6 @@ import type {
   BuyerRequirement,
   RequirementActivityStatus,
   RequirementField,
-  RequirementType,
   SavedBuyerRequirement,
   StructuredRequirement,
 } from "../types/marketplace";
@@ -153,6 +157,9 @@ interface PublicRequirement
   queryCount: number;
 
   imageUrl?: string;
+
+  budgetMin?: number | null;
+  budgetMax?: number | null;
 }
 
 function toInquiryModalRequirement(
@@ -257,345 +264,8 @@ function toInquiryModalRequirement(
 
 // Auth modal state is declared inside Find().
 // ======================================================
-// DEMO REQUIREMENTS
+// PUBLIC REQUIREMENTS NOW COME FROM ASP.NET CORE API
 // ======================================================
-
-const demoBuyerRequirements: PublicRequirement[] = [
-  {
-    id:
-      "demo-corolla",
-
-    userId:
-      "demo-user-corolla",
-
-    title:
-      "Toyota Corolla 2021–2023 Automatic Required",
-
-    description:
-      "Looking for a clean Toyota Corolla automatic. Genuine condition preferred.",
-
-    location:
-      "Lahore",
-
-    budget:
-      "PKR 5,500,000",
-
-    category:
-      "Vehicles",
-
-    requirementType:
-      "product",
-
-    verified:
-      true,
-
-    activityStatus:
-      "active",
-
-    createdAt:
-      new Date(
-        Date.now() -
-          2 *
-            24 *
-            60 *
-            60 *
-            1000,
-      ).toISOString(),
-
-    userName:
-      "Hamza Ahmed",
-
-    userRating:
-      4.8,
-
-    userReviewCount:
-      18,
-
-    queryCount:
-      4,
-
-    source:
-      "demo",
-  },
-
-  {
-    id:
-      "demo-rado",
-
-    userId:
-      "demo-user-rado",
-
-    title:
-      "Original Rado Watch Required",
-
-    description:
-      "Original Rado watch required in good condition. Box and papers preferred.",
-
-    location:
-      "Islamabad",
-
-    budget:
-      "PKR 250,000",
-
-    category:
-      "Watches",
-
-    requirementType:
-      "product",
-
-    verified:
-      true,
-
-    activityStatus:
-      "active",
-
-    createdAt:
-      new Date(
-        Date.now() -
-          5 *
-            24 *
-            60 *
-            60 *
-            1000,
-      ).toISOString(),
-
-    userName:
-      "Saad Malik",
-
-    userRating:
-      4.9,
-
-    userReviewCount:
-      31,
-
-    queryCount:
-      7,
-
-    source:
-      "demo",
-  },
-
-  {
-    id:
-      "demo-cement",
-
-    userId:
-      "demo-user-cement",
-
-    title:
-      "Cement Required for House Construction",
-
-    description:
-      "Need cement for residential construction. Looking for competitive bulk pricing.",
-
-    location:
-      "Rawalpindi",
-
-    budget:
-      "PKR 600,000",
-
-    category:
-      "Construction",
-
-    requirementType:
-      "product",
-
-    verified:
-      true,
-
-    activityStatus:
-      "inactive",
-
-    createdAt:
-      new Date(
-        Date.now() -
-          15 *
-            24 *
-            60 *
-            60 *
-            1000,
-      ).toISOString(),
-
-    userName:
-      "Usman Khan",
-
-    userRating:
-      4.7,
-
-    userReviewCount:
-      11,
-
-    queryCount:
-      12,
-
-    source:
-      "demo",
-  },
-
-  {
-    id:
-      "demo-iphone",
-
-    userId:
-      "demo-user-iphone",
-
-    title:
-      "iPhone 16 Pro Required",
-
-    description:
-      "Looking for PTA approved iPhone 16 Pro, sealed or excellent condition.",
-
-    location:
-      "Karachi",
-
-    budget:
-      "PKR 400,000",
-
-    category:
-      "Mobiles",
-
-    requirementType:
-      "product",
-
-    verified:
-      true,
-
-    activityStatus:
-      "active",
-
-    createdAt:
-      new Date().toISOString(),
-
-    userName:
-      "Adeel Shah",
-
-    userRating:
-      4.6,
-
-    userReviewCount:
-      24,
-
-    queryCount:
-      3,
-
-    source:
-      "demo",
-  },
-
-  {
-    id:
-      "demo-electrician",
-
-    userId:
-      "demo-user-electrician",
-
-    title:
-      "Electrician Needed for Complete House Wiring",
-
-    description:
-      "Need an experienced electrician for complete wiring of a new 10 marla house.",
-
-    location:
-      "DHA Lahore",
-
-    budget:
-      "PKR 80,000",
-
-    category:
-      "Home Services",
-
-    requirementType:
-      "service",
-
-    verified:
-      true,
-
-    activityStatus:
-      "active",
-
-    createdAt:
-      new Date(
-        Date.now() -
-          1 *
-            24 *
-            60 *
-            60 *
-            1000,
-      ).toISOString(),
-
-    userName:
-      "Ali Raza",
-
-    userRating:
-      4.9,
-
-    userReviewCount:
-      27,
-
-    queryCount:
-      4,
-
-    source:
-      "demo",
-  },
-
-  {
-    id:
-      "demo-ac",
-
-    userId:
-      "demo-user-ac",
-
-    title:
-      "AC Technician Required",
-
-    description:
-      "1.5 ton inverter AC needs service and cooling inspection.",
-
-    location:
-      "Gulberg Lahore",
-
-    budget:
-      "PKR 5,000",
-
-    category:
-      "Home Services",
-
-    requirementType:
-      "service",
-
-    verified:
-      true,
-
-    activityStatus:
-      "inactive",
-
-    createdAt:
-      new Date(
-        Date.now() -
-          35 *
-            24 *
-            60 *
-            60 *
-            1000,
-      ).toISOString(),
-
-    userName:
-      "Farhan Ahmed",
-
-    userRating:
-      4.5,
-
-    userReviewCount:
-      9,
-
-    queryCount:
-      5,
-
-    source:
-      "demo",
-  },
-];
 
 const PAGE_SIZE =
   10;
@@ -616,6 +286,18 @@ export default function Find() {
     showAuthModal,
     setShowAuthModal,
   ] = useState(false);
+  
+  const otpAction = useRef<
+    | { kind: "buyer" }
+    | { kind: "seller"; requirement: PublicRequirement; offer?: { message: string; offeredPrice?: number } }
+    | null
+  >(null);
+  const buyerInFlight = useRef(false);
+  const sellerInFlight = useRef(false);
+  const sentInquiryIds = useRef(new Set<string>());
+  const [submittingRequirement, setSubmittingRequirement] = useState(false);
+  const [submittingInquiry, setSubmittingInquiry] = useState(false);
+  const resumeHandled = useRef(false);
 
   const [
     authRole,
@@ -645,6 +327,34 @@ export default function Find() {
       () =>
         getCurrentUser(),
     );
+
+  const [sellerBalance, setSellerBalance] = useState(0);
+  const INQUIRY_COST = 10;
+
+  const refreshSellerWallet = useCallback(async () => {
+    const user = getCurrentUser();
+
+    if (!user || user.role !== "seller") {
+      setSellerBalance(0);
+      return;
+    }
+
+    try {
+      const wallet = await getSellerWallet();
+      setSellerBalance(wallet.balance);
+    } catch (error) {
+      console.error("Unable to load seller wallet.", error);
+      setSellerBalance(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentUser?.role === "seller") {
+      void refreshSellerWallet();
+    } else {
+      setSellerBalance(0);
+    }
+  }, [currentUser?.id, currentUser?.role, refreshSellerWallet]);
 
   const [
     search,
@@ -838,262 +548,306 @@ export default function Find() {
   ] =
     useState(0);
 
+  const [
+    publicRequirements,
+    setPublicRequirements,
+  ] = useState<PublicRequirement[]>([]);
+
+  const [
+    requirementsLoading,
+    setRequirementsLoading,
+  ] = useState(true);
+
+  const [
+    ,
+    setRequirementsError,
+  ] = useState("");
+
+  const completeRequirementSubmission = useCallback(async () => {
+    if (buyerInFlight.current) return;
+    const pending = getPendingRequirement();
+    if (!pending) return; // Already consumed by a successful callback.
+    buyerInFlight.current = true;
+    setSubmittingRequirement(true);
+    try {
+      const user = await refreshCurrentUser();
+      setCurrentUser(user);
+      if (user.role !== "buyer") throw new Error("Requirement add karne ke liye Buyer account use karein.");
+      if (!user.phoneVerified) {
+        otpAction.current = { kind: "buyer" };
+        setShowAiComposer(false);
+        setShowOtp(true);
+        return;
+      }
+      const created = await createRequirement(pending);
+      clearPendingRequirement();
+      otpAction.current = null;
+      setGeneratedRequirement(null);
+      setComposerInput("");
+      setComposerImages([]);
+      setShowAiComposer(false);
+      setSuccessReference(created.referenceNo);
+      setSuccessMessage("Requirement submitted. Pending admin review.");
+      setRefreshKey(value => value + 1);
+    } catch (error) {
+      setShowAiComposer(true);
+      alert(error instanceof Error ? error.message : "Requirement submit nahi ho saki.");
+    } finally {
+      buyerInFlight.current = false;
+      setSubmittingRequirement(false);
+    }
+  }, [setCurrentUser, setSubmittingRequirement, setShowAiComposer, setShowOtp,
+    setGeneratedRequirement, setComposerInput, setComposerImages,
+    setSuccessReference, setSuccessMessage, setRefreshKey]);
+
+  // Consume redirects once, including React StrictMode effect replays.
+  useEffect(() => {
+    if (searchParams.get("resumeRequirement") !== "true" || resumeHandled.current) return;
+    resumeHandled.current = true;
+    const pending = getPendingRequirement();
+    navigate("/find", { replace: true });
+    if (!pending || !getCurrentUser()) return;
+    setGeneratedRequirement(pending);
+    void completeRequirementSubmission();
+  }, [navigate, searchParams, completeRequirementSubmission]);
+
   // ====================================================
-  // RESUME AFTER LOGIN
+  // PUBLIC REQUIREMENTS - REAL BACKEND API + DB FILTERS
   // ====================================================
 
   useEffect(() => {
-    const resume =
-      searchParams.get(
-        "resumeRequirement",
-      );
+    let cancelled = false;
 
-    if (
-      resume !==
-      "true"
-    ) {
-      return;
-    }
-
-    const user =
-      getCurrentUser();
-
-    const pending =
-      getPendingRequirement();
-
-    if (
-      !user ||
-      !pending
-    ) {
-      navigate(
-        "/find",
-        {
-          replace:
-            true,
-        },
-      );
-
-      return;
-    }
-
-    setCurrentUser(
-      user,
-    );
-
-    setGeneratedRequirement(
-      pending,
-    );
-
-    setShowAiComposer(
-      true,
-    );
-
-    if (
-      !user.phoneVerified
-    ) {
-      setShowOtp(
-        true,
-      );
-
-      navigate(
-        "/find",
-        {
-          replace:
-            true,
-        },
-      );
-
-      return;
-    }
-
-    const savedRequirement =
-      saveBuyerRequirement(
-        pending,
-        user,
-        "admin_review_required",
-      );
-
-    clearPendingRequirement();
-
-    setGeneratedRequirement(
-      null,
-    );
-
-    setShowAiComposer(
-      false,
-    );
-
-    setSuccessReference(savedRequirement.id);
-
-    setSuccessMessage(
-      "Requirement submitted. Pending admin review.",
-    );
-
-    setRefreshKey(
-      (value) =>
-        value + 1,
-    );
-
-    navigate(
-      "/find",
-      {
-        replace:
-          true,
-      },
-    );
-  }, [
-    navigate,
-    searchParams,
-  ]);
-
-  // ====================================================
-  // REAL REQUIREMENTS
-  // ====================================================
-
-  const realRequirements =
-    useMemo(() => {
-      void refreshKey;
-
-      return getVerifiedBuyerRequirements().map(
-        (
-          requirement,
-        ): PublicRequirement => {
-          const getField =
-            (
-              names: string[],
-            ) => {
-              const normalized =
-                names.map(
-                  normalize,
-                );
-
-              const match =
-                requirement.fields.find(
-                  (field) =>
-                    normalized.includes(
-                      normalize(
-                        field.id,
-                      ),
-                    ) ||
-                    normalized.includes(
-                      normalize(
-                        field.label,
-                      ),
-                    ),
-                );
-
-              return (
-                match?.value ??
-                ""
-              );
-            };
-
-          return {
-            id:
-              requirement.id,
-
-            userId:
-              requirement.userId,
-
-            title:
-              requirement.title,
-
-            description:
-              requirement.fields
-                .filter(
-                  (field) =>
-                    field.value,
-                )
-                .slice(
-                  0,
-                  4,
-                )
-                .map(
-                  (field) =>
-                    `${field.label}: ${field.value}`,
-                )
-                .join(
-                  " • ",
-                ),
-
-            location:
-              buildLocationFromFields(
-                requirement.fields,
-              ),
-
-            budget:
-              getField([
-                "budget",
-                "price",
-                "expected budget",
-              ]) ||
-              undefined,
-
-            category:
-              requirement.category,
-
-            requirementType:
-              requirement.requirementType ??
-              inferRequirementType(
-                requirement,
-              ),
-
-            verified:
+    // Avoid firing a request on every keystroke / slider movement.
+    const timer = window.setTimeout(
+      () => {
+        const loadRequirements =
+          async () => {
+            setRequirementsLoading(
               true,
+            );
 
-            activityStatus:
-              requirement.activityStatus ??
-              "active",
+            setRequirementsError(
+              "",
+            );
 
-            createdAt:
-              requirement.createdAt,
+            try {
+              const response =
+                await getPublicRequirements({
+                  search:
+                    search.trim() ||
+                    undefined,
 
-            userName:
-              "KhojMarket User",
+                  country:
+                    countryFilter.trim() ||
+                    undefined,
 
-            userRating:
-              5,
+                  city:
+                    cityFilter.trim() ||
+                    undefined,
 
-            userReviewCount:
-              0,
+                  area:
+                    areaFilter.trim() ||
+                    undefined,
 
-            queryCount:
-              getInquiryCountByRequirement(
-                requirement.id,
-              ),
+                  postalCode:
+                    postalCodeFilter.trim() ||
+                    undefined,
 
-            imageUrl:
-              requirement.fields.find(
-                (field) =>
-                  normalize(field.id).startsWith("image") &&
-                  Boolean(field.value),
-              )?.value ||
-              getField([
-                "photo",
-                "image url",
-                "photo url",
-              ]) ||
-              undefined,
+                  category:
+                    categoryFilter ===
+                    "all"
+                      ? undefined
+                      : categoryFilter,
 
-            source:
-              "real",
+                  requirementType:
+                    typeFilter ===
+                    "all"
+                      ? undefined
+                      : typeFilter,
+
+                  budgetMin:
+                    minPrice > 0
+                      ? minPrice
+                      : undefined,
+
+                  budgetMax:
+                    maxPrice <
+                    MAX_RANGE
+                      ? maxPrice
+                      : undefined,
+
+                  postedDate:
+                    postedDateFilter ===
+                    "any"
+                      ? undefined
+                      : postedDateFilter,
+
+                  page: 1,
+                  pageSize: 50,
+                });
+
+              if (cancelled) {
+                return;
+              }
+
+              const mapped =
+                response.items.map(
+                  (
+                    item:
+                      RequirementListItem,
+                  ): PublicRequirement => {
+                    const location = [
+                      item.area,
+                      item.city,
+                      item.country,
+                    ]
+                      .filter(Boolean)
+                      .join(", ");
+
+                    let budget:
+                      | string
+                      | undefined;
+
+                    if (
+                      item.budgetMin !=
+                        null &&
+                      item.budgetMax !=
+                        null
+                    ) {
+                      budget =
+                        `PKR ${item.budgetMin.toLocaleString()} - ${item.budgetMax.toLocaleString()}`;
+                    } else if (
+                      item.budgetMax !=
+                      null
+                    ) {
+                      budget =
+                        `Up to PKR ${item.budgetMax.toLocaleString()}`;
+                    } else if (
+                      item.budgetMin !=
+                      null
+                    ) {
+                      budget =
+                        `From PKR ${item.budgetMin.toLocaleString()}`;
+                    }
+
+                    const description = [
+                      item.subCategory,
+                      item.category,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ");
+
+                    return {
+                      id: item.id,
+
+                      userId:
+                        `public-${item.id}`,
+
+                      title:
+                        item.title,
+
+                      description,
+
+                      location:
+                        location ||
+                        "Location not provided",
+
+                      budget,
+
+                      category:
+                        item.category ||
+                        "Other",
+
+                      requirementType:
+                        item.requirementType,
+
+                      verified: true,
+
+                      activityStatus:
+                        item.activityStatus,
+
+                      createdAt:
+                        item.createdAt,
+
+                      userName:
+                        "KhojMarket User",
+
+                      userRating: 0,
+
+                      userReviewCount: 0,
+
+                      queryCount:
+                        item.inquiryCount ??
+                        0,
+
+                      imageUrl:
+                        getRequirementImageUrl(
+                          item.coverImagePath,
+                        ),
+
+                      budgetMin:
+                        item.budgetMin,
+
+                      budgetMax:
+                        item.budgetMax,
+
+                      source: "real",
+                    };
+                  },
+                );
+
+              setPublicRequirements(
+                mapped,
+              );
+            } catch (error) {
+              if (cancelled) {
+                return;
+              }
+
+              setPublicRequirements(
+                [],
+              );
+
+              setRequirementsError(
+                error instanceof Error
+                  ? error.message
+                  : "Unable to load requirements from server.",
+              );
+            } finally {
+              if (!cancelled) {
+                setRequirementsLoading(
+                  false,
+                );
+              }
+            }
           };
-        },
-      );
-    }, [
-      refreshKey,
-    ]);
 
-  const publicRequirements =
-    useMemo(
-      () => [
-        ...realRequirements,
-        ...demoBuyerRequirements,
-      ],
-      [
-        realRequirements,
-      ],
+        void loadRequirements();
+      },
+      300,
     );
+
+    return () => {
+      cancelled = true;
+
+      window.clearTimeout(
+        timer,
+      );
+    };
+  }, [
+    refreshKey,
+    search,
+    countryFilter,
+    cityFilter,
+    areaFilter,
+    postalCodeFilter,
+    categoryFilter,
+    typeFilter,
+    minPrice,
+    maxPrice,
+    postedDateFilter,
+  ]);
 
   // ====================================================
   // CATEGORIES
@@ -1239,22 +993,21 @@ export default function Find() {
             !verifiedOnly ||
             item.verified;
 
-          const price =
-            parseMoney(
-              item.budget,
-            );
+          const itemBudgetMin =
+            item.budgetMin ??
+            parseMoney(item.budget);
+
+          const itemBudgetMax =
+            item.budgetMax ??
+            itemBudgetMin;
 
           const matchesMin =
-            price ===
-              null ||
-            price >=
-              minPrice;
+            itemBudgetMax == null ||
+            itemBudgetMax >= minPrice;
 
           const matchesMax =
-            price ===
-              null ||
-            price <=
-              maxPrice;
+            itemBudgetMin == null ||
+            itemBudgetMin <= maxPrice;
 
           const matchesDate =
             matchesPostedDate(
@@ -1405,137 +1158,81 @@ export default function Find() {
   // INQUIRY
   // ====================================================
 
-  const handleSendInquiry =
-    (
-      requirement:
-        PublicRequirement,
-    ) => {
-      if (
-        requirement.activityStatus ===
-        "inactive"
-      ) {
-        alert(
-          "This requirement is closed and is not accepting new inquiries.",
-        );
-
+  const continueSellerInquiry = async (
+    requirement: PublicRequirement,
+    offer?: { message: string; offeredPrice?: number },
+  ) => {
+    if (sellerInFlight.current) return;
+    sellerInFlight.current = true;
+    setSubmittingInquiry(true);
+    try {
+      const user = await refreshCurrentUser();
+      setCurrentUser(user);
+      if (user.role !== "seller") {
+        alert("Inquiry send karne ke liye Seller account use karein.");
         return;
       }
-
-      const user =
-        getCurrentUser();
-
-      if (!user) {
-        setAuthRole("seller");
-        setPendingAuthAction("inquiry");
-        setPendingInquiryAfterAuth(
-          requirement,
-        );
-        setShowAuthModal(true);
-
+      if (user.sellerVerificationStatus !== "verified") {
+        alert("Seller Verification complete karna required hai.");
+        navigate("/profile");
         return;
       }
-
-      if (
-        user.role !==
-        "seller"
-      ) {
-        alert(
-          "Inquiry send karne ke liye Seller account use karein.",
-        );
-
+      if (!user.phoneVerified) {
+        otpAction.current = { kind: "seller", requirement, offer };
+        setInquiryRequirement(null);
+        setShowOtp(true);
         return;
       }
-
-      if (
-        user.sellerVerificationStatus !==
-        "verified"
-      ) {
-        alert(
-          "Seller Verification complete karna required hai.",
-        );
-
-        navigate(
-          "/profile",
-        );
-
+      const inquiryKey = user.id + ":" + requirement.id;
+      if (sentInquiryIds.current.has(inquiryKey)) {
+        setInquiryRequirement(null);
         return;
       }
-
-      setCurrentUser(
-        user,
-      );
-
-      setInquiryRequirement(
-        requirement,
-      );
-    };
-
-  const confirmInquiry =
-    (
-      message: string,
-      offeredPrice: string,
-    ) => {
-      if (
-        !inquiryRequirement
-      ) {
+      if (!offer) {
+        await refreshSellerWallet();
+        setInquiryRequirement(requirement);
         return;
       }
+      await sendSellerInquiry({ requirementId: requirement.id, ...offer });
+      await refreshSellerWallet();
+      sentInquiryIds.current.add(inquiryKey);
+      setInquiryRequirement(null);
+      setRefreshKey(value => value + 1);
+      setSuccessMessage("Inquiry submitted successfully.");
+    } catch (error) {
+      if (offer) setInquiryRequirement(requirement);
+      alert(error instanceof Error ? error.message : "Inquiry could not be submitted.");
+    } finally {
+      sellerInFlight.current = false;
+      setSubmittingInquiry(false);
+    }
+  };
 
-      const seller =
-        getCurrentUser();
+  const handleSendInquiry = (requirement: PublicRequirement) => {
+    if (sellerInFlight.current || otpAction.current) return;
+    if (requirement.activityStatus === "inactive") {
+      alert("This requirement is closed and is not accepting new inquiries.");
+      return;
+    }
+    if (!getCurrentUser()) {
+      setAuthRole("seller");
+      setPendingAuthAction("inquiry");
+      setPendingInquiryAfterAuth(requirement);
+      setShowAuthModal(true);
+      return;
+    }
+    void continueSellerInquiry(requirement);
+  };
 
-      if (
-        !seller ||
-        seller.role !==
-          "seller"
-      ) {
-        return;
-      }
-
-      try {
-        sendInquiry({
-          requirementId:
-            inquiryRequirement.id,
-
-          buyerUserId:
-            inquiryRequirement.userId ??
-            `demo-${inquiryRequirement.id}`,
-
-          seller,
-
-          message,
-
-          offeredPrice:
-            offeredPrice ||
-            undefined,
-
-          creditCost:
-            DEFAULT_INQUIRY_COST,
-        });
-
-        setInquiryRequirement(
-          null,
-        );
-
-        setRefreshKey(
-          (value) =>
-            value + 1,
-        );
-
-        setSuccessMessage(
-          "Inquiry submitted successfully.",
-        );
-      } catch (
-        error
-      ) {
-        alert(
-          error instanceof
-            Error
-            ? error.message
-            : "Inquiry could not be submitted.",
-        );
-      }
-    };
+  const confirmInquiry = (message: string, offeredPrice: string) => {
+    if (!inquiryRequirement || sellerInFlight.current || otpAction.current) return;
+    const parsedPrice = offeredPrice.trim() ? Number(offeredPrice.replace(/,/g, "")) : undefined;
+    if (parsedPrice !== undefined && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
+      alert("Valid offered price enter karein.");
+      return;
+    }
+    void continueSellerInquiry(inquiryRequirement, { message, offeredPrice: parsedPrice });
+  };
 
   // ====================================================
   // GENERATE
@@ -1618,9 +1315,9 @@ export default function Find() {
         },
       );
     };
-
-  const submitRequirement =
-    () => {
+    const submitRequirement =
+    async () => {
+      if (buyerInFlight.current || otpAction.current) return;
       if (
         !generatedRequirement
       ) {
@@ -1666,17 +1363,16 @@ export default function Find() {
             !field.value.trim(),
         );
 
-      if (
-        missing
-      ) {
+      if (missing) {
         return;
       }
 
       const requirementToSave:
         StructuredRequirement = {
           ...generatedRequirement,
-          fields: [
-            ...generatedRequirement.fields.filter(
+
+          fields:
+            generatedRequirement.fields.filter(
               (field) =>
                 !normalize(
                   field.id,
@@ -1684,19 +1380,6 @@ export default function Find() {
                   "image",
                 ),
             ),
-            ...composerImages.map(
-              (
-                image,
-                index,
-              ) =>
-                createField(
-                  `image${index + 1}`,
-                  `Image ${index + 1}`,
-                  image,
-                  index === 0,
-                ),
-            ),
-          ],
         };
 
       savePendingRequirement(
@@ -1707,9 +1390,17 @@ export default function Find() {
         getCurrentUser();
 
       if (!user) {
-        setAuthRole("buyer");
-        setPendingAuthAction("requirement");
-        setShowAuthModal(true);
+        setAuthRole(
+          "buyer",
+        );
+
+        setPendingAuthAction(
+          "requirement",
+        );
+
+        setShowAuthModal(
+          true,
+        );
 
         return;
       }
@@ -1725,111 +1416,23 @@ export default function Find() {
         return;
       }
 
-      if (
-        !user.phoneVerified
-      ) {
-        setShowOtp(
-          true,
-        );
-
-        return;
-      }
-
-      const savedRequirement =
-        saveBuyerRequirement(
-          requirementToSave,
-          user,
-          "admin_review_required",
-        );
-
-      clearPendingRequirement();
-
-      setGeneratedRequirement(
-        null,
-      );
-
-      setComposerInput(
-        "",
-      );
-
-      setComposerImages([]);
-
-      setShowAiComposer(
-        false,
-      );
-
-      setSuccessReference(savedRequirement.id);
-
-      setSuccessMessage(
-        "Requirement submitted. Pending admin review.",
-      );
-
-      setRefreshKey(
-        (value) =>
-          value + 1,
-      );
+      await completeRequirementSubmission();
     };
 
-  const handleOtpVerified =
-    () => {
-      const user =
-        getCurrentUser();
-
-      const pending =
-        getPendingRequirement();
-
-      if (
-        !user ||
-        !pending
-      ) {
-        return;
-      }
-
-      const verified =
-        markPhoneVerified(
-          user.id,
-        );
-
-      if (!verified) {
-        return;
-      }
-
-      const savedRequirement =
-        saveBuyerRequirement(
-          pending,
-          verified,
-          "admin_review_required",
-        );
-
-      clearPendingRequirement();
-
-      setCurrentUser(
-        verified,
-      );
-
-      setShowOtp(
-        false,
-      );
-
-      setShowAiComposer(
-        false,
-      );
-
-      setGeneratedRequirement(
-        null,
-      );
-
-      setSuccessReference(savedRequirement.id);
-
-      setSuccessMessage(
-        "Phone verified. Requirement submitted for admin review.",
-      );
-
-      setRefreshKey(
-        (value) =>
-          value + 1,
-      );
-    };
+  const handleOtpVerified = (user: User) => {
+    if (!user.phoneVerified) return;
+    const action = otpAction.current;
+    if (!action) return;
+    // Consume before any async continuation or modal state transition.
+    otpAction.current = null;
+    setCurrentUser(user);
+    setShowOtp(false);
+    if (action.kind === "buyer" && user.role === "buyer") {
+      void completeRequirementSubmission();
+    } else if (action.kind === "seller" && user.role === "seller") {
+      void continueSellerInquiry(action.requirement, action.offer);
+    }
+  };
 
   const handleLogout =
     () => {
@@ -2130,10 +1733,9 @@ export default function Find() {
                 </h1>
 
                 <p className="mt-1 text-xs text-slate-400">
-                  {
-                    filteredRequirements.length
-                  }{" "}
-                  requirements found
+                  {requirementsLoading
+                    ? "Loading requirements..."
+                    : `${filteredRequirements.length} requirements found`}
                 </p>
               </div>
             </div>
@@ -2368,6 +1970,7 @@ export default function Find() {
       {/* INQUIRY MODAL */}
 
       <SendInquiryModal
+        submitting={submittingInquiry}
         open={
           Boolean(
             inquiryRequirement,
@@ -2379,21 +1982,14 @@ export default function Find() {
           )
         }
         currentBalance={
-          currentUser?.role ===
-          "seller"
-            ? getCreditBalance(
-                currentUser.id,
-              )
+          currentUser?.role === "seller"
+            ? sellerBalance
             : 0
         }
-        inquiryCost={
-          DEFAULT_INQUIRY_COST
-        }
-        onClose={() =>
-          setInquiryRequirement(
-            null,
-          )
-        }
+        inquiryCost={INQUIRY_COST}
+        onClose={() => {
+          if (!sellerInFlight.current) setInquiryRequirement(null);
+        }}
         onConfirm={
           confirmInquiry
         }
@@ -2410,6 +2006,7 @@ export default function Find() {
   setImages={setComposerImages}
   onGenerate={generateRequirement}
   onFieldChange={updateGeneratedField}
+  submitting={submittingRequirement}
   onSubmit={submitRequirement}
   onClose={() =>
     setShowAiComposer(false)
@@ -2606,74 +2203,32 @@ export default function Find() {
         onAuthenticated={(user) => {
           setCurrentUser(user);
           setShowAuthModal(false);
-
-          if (
-            pendingAuthAction === "inquiry" &&
-            pendingInquiryAfterAuth
-          ) {
-            const requirement =
-              pendingInquiryAfterAuth;
-
-            setPendingAuthAction(null);
-            setPendingInquiryAfterAuth(null);
-
-            if (
-              user.role === "seller" &&
-              user.sellerVerificationStatus === "verified"
-            ) {
-              setInquiryRequirement(
-                requirement,
-              );
-            } else if (
-              user.role === "seller"
-            ) {
-              setSuccessMessage(
-                "Login successful. Seller verification complete karein before sending an inquiry.",
-              );
-              navigate("/profile");
-            }
-
-            return;
-          }
-
-          if (
-            pendingAuthAction === "requirement"
-          ) {
-            setPendingAuthAction(null);
-
-            if (
-              user.role === "buyer"
-            ) {
-              setShowAiComposer(false);
-
-              if (!user.phoneVerified) {
-                setShowOtp(true);
-              } else {
-                submitRequirement();
-              }
-            }
+          const action = pendingAuthAction;
+          const requirement = pendingInquiryAfterAuth;
+          setPendingAuthAction(null);
+          setPendingInquiryAfterAuth(null);
+          if (action === "inquiry" && requirement && user.role === "seller") {
+            void continueSellerInquiry(requirement);
+          } else if (action === "requirement" && user.role === "buyer") {
+            void completeRequirementSubmission();
           }
         }}
       />
 
-      <FastVerificationModal
-        open={
-          showOtp
-        }
-        phone={
-          currentUser?.phone ??
-          getCurrentUser()?.phone ??
-          ""
-        }
-        onClose={() =>
-          setShowOtp(
-            false,
-          )
-        }
-        onVerified={
-          handleOtpVerified
-        }
-      />
+      {showOtp && (
+        <PhoneOtpModal
+          open
+          phone={currentUser?.phone ?? ""}
+          onClose={() => {
+            const action = otpAction.current;
+            otpAction.current = null;
+            setShowOtp(false);
+            if (action?.kind === "buyer") setShowAiComposer(true);
+            if (action?.kind === "seller" && action.offer) setInquiryRequirement(action.requirement);
+          }}
+          onVerified={handleOtpVerified}
+        />
+      )}
 
       {successMessage && (
         <div className="fixed left-1/2 top-24 z-[110] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-emerald-200 bg-white px-5 py-4 shadow-2xl">
@@ -2689,7 +2244,7 @@ export default function Find() {
 
               {successReference && (
                 <p className="mt-1 break-all text-xs font-semibold text-slate-500">
-                  Reference: {formatRequirementReference(successReference)}
+                  Reference: {successReference}
                 </p>
               )}
             </div>
@@ -3878,6 +3433,7 @@ function AiComposer({
   onGenerate,
   onFieldChange,
   onSubmit,
+  submitting,
   onClose,
 }: {
   input: string;
@@ -3891,6 +3447,7 @@ function AiComposer({
     value: string,
   ) => void;
   onSubmit: () => void;
+  submitting: boolean;
   onClose: () => void;
 }) {
   const fileRef =
@@ -4578,6 +4135,7 @@ function AiComposer({
 
             <button
               type="button"
+              disabled={submitting}
               onClick={() => {
                 setShowValidation(
                   true,
@@ -4587,7 +4145,7 @@ function AiComposer({
               }}
               className="mt-6 w-full rounded-xl bg-slate-950 px-5 py-3 font-bold text-white"
             >
-              Submit Requirement
+              {submitting ? "Submitting..." : "Submit Requirement"}
             </button>
           </div>
         )}
@@ -4922,18 +4480,6 @@ function BasicModal({
 // HELPERS
 // ======================================================
 
-function formatRequirementReference(
-  id: string,
-) {
-  const shortId =
-    id
-      .replace(/-/g, "")
-      .slice(0, 8)
-      .toUpperCase();
-
-  return `KM-REQ-${shortId}`;
-}
-
 function normalize(
   value: string,
 ) {
@@ -5034,40 +4580,6 @@ function matchesPostedDate(
 }
 
 
-function inferRequirementType(
-  requirement:
-    StructuredRequirement,
-): RequirementType {
-  const value = [
-    requirement.category,
-    requirement.subCategory ??
-      "",
-    requirement.title,
-  ]
-    .join(
-      " ",
-    )
-    .toLowerCase();
-
-  const words = [
-    "service",
-    "repair",
-    "electric",
-    "plumber",
-    "technician",
-    "developer",
-  ];
-
-  return words.some(
-    (item) =>
-      value.includes(
-        item,
-      ),
-  )
-    ? "service"
-    : "product";
-}
-
 function formatRangeValue(
   value: number,
 ) {
@@ -5086,53 +4598,6 @@ function formatRangeValue(
   }
 
   return `PKR ${value.toLocaleString()}`;
-}
-
-function buildLocationFromFields(
-  fields: RequirementField[],
-) {
-  const aliases: Record<string, string[]> = {
-    country: ["country"],
-    province: ["province", "state", "province state"],
-    city: ["city"],
-    area: ["area", "locality", "location", "delivery location"],
-    postalCode: ["postal code", "postalcode", "zip", "zipcode"],
-  };
-
-  const read = (names: string[]) => {
-    const normalizedNames =
-      names.map(normalize);
-
-    return (
-      fields.find(
-        (field) =>
-          normalizedNames.includes(
-            normalize(field.id),
-          ) ||
-          normalizedNames.includes(
-            normalize(field.label),
-          ),
-      )?.value.trim() ?? ""
-    );
-  };
-
-  const country = read(aliases.country);
-  const province = read(aliases.province);
-  const city = read(aliases.city);
-  const area = read(aliases.area);
-  const postalCode = read(aliases.postalCode);
-
-  const parts = [
-    area,
-    city,
-    province,
-    postalCode,
-    country,
-  ].filter(Boolean);
-
-  return parts.length > 0
-    ? [...new Set(parts)].join(", ")
-    : "Pakistan";
 }
 
 function createLocationFields(
@@ -5913,4 +5378,3 @@ function generateMockRequirement(
     ],
   };
 }
-

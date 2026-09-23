@@ -122,7 +122,7 @@ export default function Register() {
     });
   };
 
-  const handleEmailRegister = (
+  const handleEmailRegister = async (
     event: React.FormEvent
   ) => {
     event.preventDefault();
@@ -149,7 +149,7 @@ export default function Register() {
 
     try {
       const user =
-        registerUserWithEmail({
+        await registerUserWithEmail({
           role,
           email,
           password,
@@ -169,7 +169,7 @@ export default function Register() {
     }
   };
 
-  const handlePhoneRegister = (
+  const handlePhoneRegister = async (
     event: React.FormEvent
   ) => {
     event.preventDefault();
@@ -196,7 +196,7 @@ export default function Register() {
 
     try {
       const user =
-        registerUserWithPhone({
+        await registerUserWithPhone({
           role,
           phone,
           password,
@@ -217,13 +217,13 @@ export default function Register() {
   };
 
   const handleGoogleRegister =
-    () => {
+    async () => {
       setError("");
       setLoading(true);
 
       try {
         const user =
-          continueWithGoogleDemo(
+          await continueWithGoogleDemo(
             role
           );
 
@@ -277,7 +277,9 @@ export default function Register() {
                     : "Create your account"}
               </h1>
 
-              
+              <p className="mt-2 text-sm text-slate-500">
+                Fast signup. Profile details baad mein complete kar sakte hain.
+              </p>
             </div>
 
             {!forcedRole && (
@@ -466,7 +468,10 @@ export default function Register() {
                   }
                 />
 
-               
+                <p className="mt-2 text-xs leading-5 text-slate-400">
+                  Production mein isi step ke sath OTP verification connect hogi.
+                </p>
+
                 <button
                   type="submit"
                   disabled={loading}

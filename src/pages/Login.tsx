@@ -124,7 +124,7 @@ export default function Login() {
     });
   };
 
-  const handleEmailLogin = (
+  const handleEmailLogin = async (
     event: React.FormEvent
   ) => {
     event.preventDefault();
@@ -143,7 +143,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const user = loginUser({
+      const user = await loginUser({
         email,
         password,
         role,
@@ -161,7 +161,7 @@ export default function Login() {
     }
   };
 
-  const handlePhoneLogin = (
+  const handlePhoneLogin = async (
     event: React.FormEvent
   ) => {
     event.preventDefault();
@@ -181,7 +181,7 @@ export default function Login() {
 
     try {
       const user =
-        loginUserByPhone({
+        await loginUserByPhone({
           phone,
           password,
           role,
@@ -199,13 +199,13 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     setError("");
     setLoading(true);
 
     try {
       const user =
-        continueWithGoogleDemo(role);
+        await continueWithGoogleDemo(role);
 
       finishLogin(user.role);
     } catch (exception) {
