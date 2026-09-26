@@ -232,6 +232,111 @@ import {
     );
   }
   
+
+
+  export interface RequirementFieldDetail {
+    id: string;
+    fieldKey: string;
+    label: string;
+    value: string;
+    isRequired: boolean;
+    sortOrder: number;
+  }
+  
+  export interface RequirementImageDetail {
+    id: string;
+    filePath: string;
+    isCover: boolean;
+    sortOrder: number;
+  }
+  
+  export interface RequirementDetail {
+    id: string;
+    referenceNo: string;
+    title: string;
+    category?: string | null;
+    subCategory?: string | null;
+    requirementType: "product" | "service";
+    status: string;
+    activityStatus: "active" | "inactive";
+    budgetMin?: number | null;
+    budgetMax?: number | null;
+    country?: string | null;
+    city?: string | null;
+    area?: string | null;
+    postalCode?: string | null;
+    phoneVerified: boolean;
+    createdAt: string;
+    fields: RequirementFieldDetail[];
+    images: RequirementImageDetail[];
+  }
+  
+  export function getRequirementDetails(
+    requirementId: string,
+  ) {
+    return apiRequest<RequirementDetail>(
+      `/api/requirements/${requirementId}`,
+    );
+  }
+
+  
+  export interface UpdateRequirementFieldRequest {
+    fieldKey: string;
+    label: string;
+    value: string;
+    isRequired: boolean;
+    sortOrder: number;
+  }
+  
+  export interface UpdateRequirementRequest {
+    title: string;
+    category?: string | null;
+    subCategory?: string | null;
+    requirementType: "product" | "service";
+    budgetMin?: number | null;
+    budgetMax?: number | null;
+    country?: string | null;
+    city?: string | null;
+    area?: string | null;
+    postalCode?: string | null;
+    fields: UpdateRequirementFieldRequest[];
+  }
+  
+  export function updateRequirement(
+    requirementId: string,
+    request: UpdateRequirementRequest,
+  ) {
+    return apiRequest(
+      `/api/requirements/${requirementId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(request),
+      },
+    );
+  }
+
+  export function updateRequirementActivity(
+    requirementId: string,
+    activityStatus: "active" | "inactive",
+    reason?: string,
+  ) {
+    return apiRequest(
+      `/api/requirements/${requirementId}/activity`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          activityStatus,
+          reason:
+            activityStatus === "inactive"
+              ? reason?.trim() ||
+                "Buyer temporarily paused this requirement."
+              : null,
+        }),
+      },
+    );
+  }
+  
+
   export async function getAdminPendingRequirements(
     filters: RequirementFilters = {},
   ) {
@@ -244,6 +349,40 @@ import {
     );
   }
   
+  export function uploadRequirementImages(
+    requirementId: string,
+    images: File[],
+  ) {
+    const formData =
+      new FormData();
+  
+    images.forEach((image) => {
+      formData.append(
+        "images",
+        image,
+      );
+    });
+  
+    return apiRequest<RequirementDetail>(
+      `/api/requirements/${requirementId}/images`,
+      {
+        method: "POST",
+        body: formData,
+      },
+    );
+  }
+  
+  export function deleteRequirementImage(
+    requirementId: string,
+    imageId: string,
+  ) {
+    return apiRequest<RequirementDetail>(
+      `/api/requirements/${requirementId}/images/${imageId}`,
+      {
+        method: "DELETE",
+      },
+    );
+  }
   export function getRequirementImageUrl(
     path?: string | null,
   ) {

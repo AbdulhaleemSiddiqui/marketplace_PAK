@@ -67,6 +67,7 @@ import {
 import {
   getPublicRequirements,
   getRequirementImageUrl,
+  uploadRequirementImages,
   type RequirementListItem,
 } from "../services/requirementApiService";
 
@@ -485,6 +486,11 @@ export default function Find() {
       setComposerImages,
     ] =
       useState<string[]>([]);
+      const [
+        composerImageFiles,
+        setComposerImageFiles,
+        
+      ] = useState<File[]>([]);
   const [
     generatedRequirement,
     setGeneratedRequirement,
@@ -579,12 +585,26 @@ export default function Find() {
         setShowOtp(true);
         return;
       }
-      const created = await createRequirement(pending);
-      clearPendingRequirement();
+      const created =
+      await createRequirement(pending);
+    
+    if (composerImageFiles.length === 0) {
+      throw new Error(
+        "At least one requirement image is required.",
+      );
+    }
+    
+    await uploadRequirementImages(
+      created.id,
+      composerImageFiles,
+    );
+    
+    clearPendingRequirement();
       otpAction.current = null;
       setGeneratedRequirement(null);
       setComposerInput("");
       setComposerImages([]);
+      setComposerImageFiles([]);
       setShowAiComposer(false);
       setSuccessReference(created.referenceNo);
       setSuccessMessage("Requirement submitted. Pending admin review.");
@@ -596,9 +616,20 @@ export default function Find() {
       buyerInFlight.current = false;
       setSubmittingRequirement(false);
     }
-  }, [setCurrentUser, setSubmittingRequirement, setShowAiComposer, setShowOtp,
-    setGeneratedRequirement, setComposerInput, setComposerImages,
-    setSuccessReference, setSuccessMessage, setRefreshKey]);
+  }, [
+    composerImageFiles,
+    setCurrentUser,
+    setSubmittingRequirement,
+    setShowAiComposer,
+    setShowOtp,
+    setGeneratedRequirement,
+    setComposerInput,
+    setComposerImages,
+    setComposerImageFiles,
+    setSuccessReference,
+    setSuccessMessage,
+    setRefreshKey,
+  ]);
 
   // Consume redirects once, including React StrictMode effect replays.
   useEffect(() => {
@@ -1998,12 +2029,14 @@ export default function Find() {
       {/* AI */}
 
       {showAiComposer && (
-  <AiComposer
+        <AiComposer
   input={composerInput}
   requirement={generatedRequirement}
   setInput={setComposerInput}
   images={composerImages}
   setImages={setComposerImages}
+  imageFiles={composerImageFiles}
+  setImageFiles={setComposerImageFiles}
   onGenerate={generateRequirement}
   onFieldChange={updateGeneratedField}
   submitting={submittingRequirement}
@@ -3430,6 +3463,8 @@ function AiComposer({
   setInput,
   images,
   setImages,
+  imageFiles,
+  setImageFiles,
   onGenerate,
   onFieldChange,
   onSubmit,
@@ -3441,6 +3476,11 @@ function AiComposer({
   setInput: (value: string) => void;
   images: string[];
   setImages: (value: string[]) => void;
+  imageFiles: File[];
+  setImageFiles: (
+    value: File[]
+  ) => void;
+
   onGenerate: () => void;
   onFieldChange: (
     fieldId: string,
@@ -3623,110 +3663,98 @@ function AiComposer({
     countryValue,
   ]);
 
-  const attach =
-    (
-      event:
-        ChangeEvent<HTMLInputElement>,
-    ) => {
-      const availableSlots =
-        Math.max(
-          0,
-          5 -
-            images.length,
-        );
-
-      const files =
-        Array.from(
-          event.target.files ??
-            [],
-        ).slice(
-          0,
-          availableSlots,
-        );
-
-      if (
-        files.length ===
-        0
-      ) {
-        return;
-      }
-
-      Promise.all(
-        files.map(
-          (file) =>
-            new Promise<string>(
-              (
-                resolve,
-                reject,
-              ) => {
-                const reader =
-                  new FileReader();
-
-                reader.onload =
-                  () => {
-                    if (
-                      typeof reader.result ===
-                      "string"
-                    ) {
-                      resolve(
-                        reader.result,
-                      );
-                    } else {
-                      reject();
-                    }
-                  };
-
-                reader.onerror =
-                  () =>
-                    reject();
-
-                reader.readAsDataURL(
-                  file,
-                );
-              },
-            ),
-        ),
-      )
-        .then(
-          (
-            newImages,
-          ) => {
-            setImages(
-              [
-                ...images,
-                ...newImages,
-              ].slice(
-                0,
-                5,
-              ),
-            );
-          },
-        )
-        .catch(
-          () => {
-            // Local preview failure: keep current images unchanged.
-          },
-        );
-
-      event.target.value =
-        "";
-    };
-
-  const removeImage =
-    (
-      index: number,
-    ) => {
-      setImages(
-        images.filter(
-          (
-            _,
-            imageIndex,
-          ) =>
-            imageIndex !==
-            index,
-        ),
+  const attach = (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const availableSlots =
+      Math.max(
+        0,
+        20 - imageFiles.length,
       );
-    };
+  
+    const files =
+      Array.from(
+        event.target.files ?? [],
+      ).slice(
+        0,
+        availableSlots,
+      );
+  
+    if (files.length === 0) {
+      event.target.value = "";
+      return;
+    }
+  
+    // Actual File objects backend upload ke liye.
+    setImageFiles([
+      ...imageFiles,
+      ...files,
+    ]);
+  
+    // Base64 sirf UI preview ke liye.
+    Promise.all(
+      files.map(
+        (file) =>
+          new Promise<string>(
+            (resolve, reject) => {
+              const reader =
+                new FileReader();
+  
+              reader.onload = () => {
+                if (
+                  typeof reader.result ===
+                  "string"
+                ) {
+                  resolve(
+                    reader.result,
+                  );
+                } else {
+                  reject();
+                }
+              };
+  
+              reader.onerror = () =>
+                reject();
+  
+              reader.readAsDataURL(
+                file,
+              );
+            },
+          ),
+      ),
+    )
+      .then((newImages) => {
+        setImages(
+          [
+            ...images,
+            ...newImages,
+          ].slice(0, 20),
+        );
+      })
+      .catch(() => {
+        // Preview failure should not crash UI.
+      });
+  
+    event.target.value = "";
+  };
+
+  const removeImage = (
+    index: number,
+  ) => {
+    setImages(
+      images.filter(
+        (_, imageIndex) =>
+          imageIndex !== index,
+      ),
+    );
+  
+    setImageFiles(
+      imageFiles.filter(
+        (_, imageIndex) =>
+          imageIndex !== index,
+      ),
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4">

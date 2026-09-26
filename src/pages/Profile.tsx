@@ -12,10 +12,7 @@ import {
   Store,
   X,
 } from "lucide-react";
-import {
-  markRequirementActive,
-  markRequirementInactive,
-} from "../services/requirementService";
+
 
 
 import {
@@ -53,18 +50,20 @@ import {
   type SellerWalletTransaction,
 } from "../services/sellerProfileApiService";
 
-import {
-  getBuyerRequirementsByUser,
-  updateBuyerRequirementContent,
-} from "../services/requirementService";
 
 import {
   getMyRequirements,
+  getRequirementDetails,
+  updateRequirement,
+  uploadRequirementImages,
+  deleteRequirementImage,
+  getRequirementImageUrl,
+  updateRequirementActivity,
   type RequirementListItem,
+  type RequirementDetail,
 } from "../services/requirementApiService";
 
 import type {
-  SavedBuyerRequirement,
   SellerInquiry,
 } from "../types/marketplace";
 
@@ -111,9 +110,10 @@ export default function Profile() {
     editingRequirement,
     setEditingRequirement,
   ] =
-    useState<SavedBuyerRequirement | null>(
-      null
+    useState<RequirementDetail | null>(
+      null,
     );
+  
 
 const [
     showSellerVerification,
@@ -348,12 +348,7 @@ const [
   // BUYER
   // =====================================================
 
-  const legacyRequirements =
-    isBuyer
-      ? getBuyerRequirementsByUser(
-          user.id
-        )
-      : [];
+
 
   // IMPORTANT COUNTS
 
@@ -405,85 +400,143 @@ const [
       navigate("/");
     };
 
-  const handleSaveRequirementEdit = (
-    details: string,
-    images: string[]
+    const handleSaveRequirementEdit = async (
+      updatedRequirement: RequirementDetail,
+      newImageFiles: File[],
+      deletedImageIds: string[],
+    ) => {
+      if (!editingRequirement) {
+        return;
+      }
+    
+      try {
+        const wasVerified =
+          editingRequirement.status === "verified";
+    
+        await updateRequirement(
+          editingRequirement.id,
+          {
+            title: updatedRequirement.title,
+            category:
+              updatedRequirement.category ?? null,
+            subCategory:
+              updatedRequirement.subCategory ?? null,
+            requirementType:
+              updatedRequirement.requirementType,
+            budgetMin:
+              updatedRequirement.budgetMin ?? null,
+            budgetMax:
+              updatedRequirement.budgetMax ?? null,
+            country:
+              updatedRequirement.country ?? null,
+            city:
+              updatedRequirement.city ?? null,
+            area:
+              updatedRequirement.area ?? null,
+            postalCode:
+              updatedRequirement.postalCode ?? null,
+    
+            fields:
+              updatedRequirement.fields.map(
+                (field, index) => ({
+                  fieldKey: field.fieldKey,
+                  label: field.label,
+                  value: field.value,
+                  isRequired: field.isRequired,
+                  sortOrder: index,
+                }),
+              ),
+          },
+        );
+    
+// Upload new images FIRST so backend always
+// retains at least one requirement image.
+if (newImageFiles.length > 0) {
+  await uploadRequirementImages(
+    editingRequirement.id,
+    newImageFiles,
+  );
+}
+
+// Delete old images AFTER new images exist.
+for (const imageId of deletedImageIds) {
+  await deleteRequirementImage(
+    editingRequirement.id,
+    imageId,
+  );
+}
+    
+        setEditingRequirement(null);
+    
+        setSuccessMessage(
+          wasVerified
+            ? "Requirement updated and sent for admin review again."
+            : "Requirement updated successfully.",
+        );
+    
+        setRefreshKey(
+          (value) => value + 1,
+        );
+      } catch (error) {
+        alert(
+          error instanceof Error
+            ? error.message
+            : "Unable to update requirement.",
+        );
+      }
+    };
+  const handleEditRequirement = async (
+    requirement: RequirementListItem,
   ) => {
-    if (!editingRequirement) {
-      return;
-    }
-
     try {
-      const wasVerified =
-        editingRequirement.status ===
-        "verified";
-
-      updateBuyerRequirementContent(
-        editingRequirement.id,
-        user.id,
-        details,
-        images
-      );
-
-      setEditingRequirement(
-        null
-      );
-
-      setSuccessMessage(
-        wasVerified
-          ? "Requirement updated and sent for admin review again."
-          : "Requirement updated successfully."
-      );
-
-      setRefreshKey(
-        (value) =>
-          value + 1
-      );
+      const details =
+        await getRequirementDetails(
+          requirement.id,
+        );
+  
+      setEditingRequirement(details);
     } catch (error) {
       alert(
         error instanceof Error
           ? error.message
-          : "Unable to update requirement."
+          : "Unable to load requirement.",
       );
     }
   };
 
-  const handleToggleRequirementActivity = (
-    requirement: SavedBuyerRequirement
+  const handleToggleRequirementActivity =
+  async (
+    requirement: RequirementListItem,
   ) => {
     try {
       const isActive =
-        requirement.activityStatus !== "inactive";
+        requirement.activityStatus !==
+        "inactive";
 
-      if (isActive) {
-        markRequirementInactive(
-          requirement.id,
-          user.id
-        );
+      await updateRequirementActivity(
+        requirement.id,
+        isActive
+          ? "inactive"
+          : "active",
+        isActive
+          ? "Buyer temporarily paused this requirement."
+          : undefined,
+      );
 
-        setSuccessMessage(
-          "Requirement is now inactive. Sellers can no longer send new inquiries."
-        );
-      } else {
-        markRequirementActive(
-          requirement.id,
-          user.id
-        );
-
-        setSuccessMessage(
-          "Requirement is active again and can receive seller inquiries."
-        );
-      }
+      setSuccessMessage(
+        isActive
+          ? "Requirement is now inactive. Sellers can no longer send new inquiries."
+          : "Requirement is active again and can receive seller inquiries.",
+      );
 
       setRefreshKey(
-        (value) =>
-          value + 1
+        (value) => value + 1,
       );
     } catch (error) {
       alert(
         error instanceof Error
           ? error.message
-          : "Unable to update requirement."
+          : "Unable to update requirement.",
       );
     }
   };
@@ -757,39 +810,23 @@ const [
                   text="Abhi koi buyer requirement nahi hai."
                 />
               ) : (
-                requirements.map((item) => {
-                  const legacyItem =
-                    legacyRequirements.find(
-                      (legacy) =>
-                        legacy.id === item.id
-                    );
-
-                  return (
-                    <RequirementRow
-                      key={item.id}
-                      item={item}
-                      inquiryCount={
-                        item.inquiryCount ?? 0
-                      }
-                      onEdit={
-                        legacyItem
-                          ? () =>
-                              setEditingRequirement(
-                                legacyItem
-                              )
-                          : undefined
-                      }
-                      onToggleActivity={
-                        legacyItem
-                          ? () =>
-                              handleToggleRequirementActivity(
-                                legacyItem
-                              )
-                          : undefined
-                      }
-                    />
-                  );
-                })
+                requirements.map((item) => (
+                  <RequirementRow
+                    key={item.id}
+                    item={item}
+                    inquiryCount={
+                      item.inquiryCount ?? 0
+                    }
+                    onEdit={() =>
+                      void handleEditRequirement(item)
+                    }
+                    onToggleActivity={() =>
+                      void handleToggleRequirementActivity(
+                        item,
+                      )
+                    }
+                  />
+                ))
               )}
             </HistoryCard>
 
@@ -1092,24 +1129,40 @@ function EditRequirementModal({
   onSave,
 }: {
   open: boolean;
-  requirement:
-    SavedBuyerRequirement | null;
+  requirement: RequirementDetail | null;
   onClose: () => void;
   onSave: (
-    details: string,
-    images: string[]
-  ) => void;
+    requirement: RequirementDetail,
+    newImageFiles: File[],
+    deletedImageIds: string[],
+  ) => Promise<void>;
 }) {
   const [
-    details,
-    setDetails,
-  ] = useState("");
+    form,
+    setForm,
+  ] = useState<RequirementDetail | null>(
+    null,
+  );
 
   const [
-    images,
-    setImages,
-  ] =
-    useState<string[]>([]);
+    newImageFiles,
+    setNewImageFiles,
+  ] = useState<File[]>([]);
+
+  const [
+    newImagePreviews,
+    setNewImagePreviews,
+  ] = useState<string[]>([]);
+
+  const [
+    deletedImageIds,
+    setDeletedImageIds,
+  ] = useState<string[]>([]);
+
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
 
   const [
     error,
@@ -1117,207 +1170,232 @@ function EditRequirementModal({
   ] = useState("");
 
   useEffect(() => {
-    if (
-      !open ||
-      !requirement
-    ) {
+    if (!open || !requirement) {
       return;
     }
 
-    const detailField =
-      requirement.fields.find(
-        (field) => {
-          const id =
-            field.id
-              .trim()
-              .toLowerCase();
+    setForm({
+      ...requirement,
+      fields: requirement.fields.map(
+        (field) => ({ ...field }),
+      ),
+      images: requirement.images.map(
+        (image) => ({ ...image }),
+      ),
+    });
 
-          return (
-            id === "details" ||
-            id === "detail" ||
-            id === "description"
-          );
-        }
-      );
-
-    const fallbackDetails =
-      requirement.fields
-        .filter(
-          (field) =>
-            !field.id
-              .trim()
-              .toLowerCase()
-              .startsWith(
-                "image"
-              ) &&
-            field.value
-        )
-        .slice(0, 5)
-        .map(
-          (field) =>
-            `${field.label}: ${field.value}`
-        )
-        .join("\n");
-
-    const existingImages =
-      requirement.fields
-        .filter(
-          (field) =>
-            field.id
-              .trim()
-              .toLowerCase()
-              .startsWith(
-                "image"
-              ) &&
-            Boolean(
-              field.value
-            )
-        )
-        .map(
-          (field) =>
-            field.value
-        )
-        .slice(0, 5);
-
-    setDetails(
-      detailField?.value ??
-      fallbackDetails
-    );
-
-    setImages(
-      existingImages
-    );
-
+    setNewImageFiles([]);
+    setNewImagePreviews([]);
+    setDeletedImageIds([]);
     setError("");
-  }, [
-    open,
-    requirement,
-  ]);
+  }, [open, requirement]);
 
-  if (
-    !open ||
-    !requirement
-  ) {
+  if (!open || !requirement || !form) {
     return null;
   }
 
+  const remainingImages =
+    form.images.filter(
+      (image) =>
+        !deletedImageIds.includes(
+          image.id,
+        ),
+    );
+
+  const totalImageCount =
+    remainingImages.length +
+    newImageFiles.length;
+
   const handleFiles = (
-    event:
-      ChangeEvent<HTMLInputElement>
+    event: ChangeEvent<HTMLInputElement>,
   ) => {
-    const files =
-      Array.from(
-        event.target.files ??
-        []
-      ).slice(
+    const availableSlots =
+      Math.max(
         0,
-        Math.max(
-          0,
-          5 - images.length
-        )
+        20 - totalImageCount,
       );
 
-    if (
-      files.length === 0
-    ) {
+    const files =
+      Array.from(
+        event.target.files ?? [],
+      ).slice(
+        0,
+        availableSlots,
+      );
+
+    if (files.length === 0) {
+      event.target.value = "";
       return;
     }
+
+    setNewImageFiles(
+      (current) => [
+        ...current,
+        ...files,
+      ],
+    );
 
     Promise.all(
       files.map(
         (file) =>
           new Promise<string>(
-            (
-              resolve,
-              reject
-            ) => {
+            (resolve, reject) => {
               const reader =
                 new FileReader();
 
-              reader.onload =
-                () =>
-                  resolve(
-                    String(
-                      reader.result ??
-                      ""
-                    )
-                  );
+              reader.onload = () => {
+                if (
+                  typeof reader.result ===
+                  "string"
+                ) {
+                  resolve(reader.result);
+                } else {
+                  reject();
+                }
+              };
 
-              reader.onerror =
-                () =>
-                  reject(
-                    new Error(
-                      "Image could not be read."
-                    )
-                  );
+              reader.onerror = () =>
+                reject();
 
-              reader.readAsDataURL(
-                file
-              );
-            }
-          )
-      )
+              reader.readAsDataURL(file);
+            },
+          ),
+      ),
     )
-      .then(
-        (
-          uploadedImages
-        ) => {
-          setImages(
-            (
-              current
-            ) => [
-              ...current,
-              ...uploadedImages,
-            ].slice(
-              0,
-              5
-            )
-          );
-
-          setError("");
-        }
-      )
-      .catch(() =>
+      .then((previews) => {
+        setNewImagePreviews(
+          (current) => [
+            ...current,
+            ...previews,
+          ],
+        );
+      })
+      .catch(() => {
         setError(
-          "Image upload failed."
-        )
-      );
+          "Image preview could not be generated.",
+        );
+      });
 
-    event.target.value =
-      "";
+    event.target.value = "";
   };
 
-  const submit = () => {
-    const cleanDetails =
-      details.trim();
-
-    if (!cleanDetails) {
-      setError(
-        "Details are required."
-      );
-
-      return;
-    }
-
-    if (
-      images.length === 0
-    ) {
-      setError(
-        "At least one image is required."
-      );
-
-      return;
-    }
-
-    onSave(
-      cleanDetails,
-      images
+  const removeExistingImage = (
+    imageId: string,
+  ) => {
+    setDeletedImageIds(
+      (current) => [
+        ...current,
+        imageId,
+      ],
     );
+  
+    setError("");
+  };
+
+  const removeNewImage = (
+    index: number,
+  ) => {
+    setNewImageFiles(
+      (current) =>
+        current.filter(
+          (_, imageIndex) =>
+            imageIndex !== index,
+        ),
+    );
+  
+    setNewImagePreviews(
+      (current) =>
+        current.filter(
+          (_, imageIndex) =>
+            imageIndex !== index,
+        ),
+    );
+  
+    setError("");
+  };
+
+  const updateField = (
+    index: number,
+    value: string,
+  ) => {
+    setForm(
+      (current) => {
+        if (!current) {
+          return current;
+        }
+
+        const fields =
+          current.fields.map(
+            (field, fieldIndex) =>
+              fieldIndex === index
+                ? {
+                    ...field,
+                    value,
+                  }
+                : field,
+          );
+
+        return {
+          ...current,
+          fields,
+        };
+      },
+    );
+  };
+
+  const submit = async () => {
+    if (!form.title.trim()) {
+      setError(
+        "Title is required.",
+      );
+      return;
+    }
+
+    if (totalImageCount === 0) {
+      setError(
+        "At least one image is required.",
+      );
+      return;
+    }
+
+    const missingRequiredField =
+      form.fields.find(
+        (field) =>
+          field.isRequired &&
+          !field.value.trim(),
+      );
+
+    if (missingRequiredField) {
+      setError(
+        `${missingRequiredField.label} is required.`,
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+
+      await onSave(
+        form,
+        newImageFiles,
+        deletedImageIds,
+      );
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to save requirement.",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/50 p-4">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-black">
@@ -1325,16 +1403,15 @@ function EditRequirementModal({
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              Sirf details aur images edit hongi. Dono required hain.
+              Update your requirement information and images.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={
-              onClose
-            }
-            className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"
           >
             <X size={19} />
           </button>
@@ -1342,111 +1419,149 @@ function EditRequirementModal({
 
         <div className="mt-6">
           <label className="mb-2 block text-sm font-bold">
-            Details
-            <span className="ml-1 text-red-500">
-              *
-            </span>
+            Title *
           </label>
 
-          <textarea
-            rows={7}
-            value={
-              details
+          <input
+            value={form.title}
+            onChange={(event) =>
+              setForm({
+                ...form,
+                title:
+                  event.target.value,
+              })
             }
-            onChange={(
-              event
-            ) =>
-              setDetails(
-                event.target.value
-              )
-            }
-            className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
-            placeholder="Requirement details..."
+            className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
           />
         </div>
 
+        {form.fields.length > 0 && (
+          <div className="mt-6 space-y-4">
+            <h3 className="font-black">
+              Requirement Details
+            </h3>
+
+            {form.fields.map(
+              (field, index) => (
+                <div key={field.id}>
+                  <label className="mb-2 block text-sm font-bold">
+                    {field.label}
+
+                    {field.isRequired && (
+                      <span className="ml-1 text-red-500">
+                        *
+                      </span>
+                    )}
+                  </label>
+
+                  <input
+                    value={field.value}
+                    onChange={(event) =>
+                      updateField(
+                        index,
+                        event.target.value,
+                      )
+                    }
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
+                  />
+                </div>
+              ),
+            )}
+          </div>
+        )}
+
         <div className="mt-6">
-          <div className="flex items-center justify-between gap-3">
-            <label className="text-sm font-bold">
-              Images
-              <span className="ml-1 text-red-500">
-                *
-              </span>
-            </label>
+          <div className="flex items-center justify-between">
+            <h3 className="font-black">
+              Images *
+            </h3>
 
             <span className="text-xs text-slate-400">
-              {images.length}/5
+              {totalImageCount}/20
             </span>
           </div>
 
-          {images.length >
-            0 && (
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {images.map(
-                (
-                  image,
-                  index
-                ) => (
-                  <div
-                    key={`${index}-${image.slice(0, 30)}`}
-                    className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+
+            {remainingImages.map(
+              (image) => (
+                <div
+                  key={image.id}
+                  className="relative overflow-hidden rounded-2xl border border-slate-200"
+                >
+                  <img
+                    src={
+                      getRequirementImageUrl(
+                        image.filePath,
+                      )
+                    }
+                    alt="Requirement"
+                    className="h-32 w-full object-cover"
+                  />
+
+                  {image.isCover && (
+                    <span className="absolute left-2 top-2 rounded-full bg-slate-950/80 px-2 py-1 text-[10px] font-bold text-white">
+                      Cover
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      removeExistingImage(
+                        image.id,
+                      )
+                    }
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow"
                   >
-                    <img
-                      src={
-                        image
-                      }
-                      alt={`Requirement ${index + 1}`}
-                      className="h-32 w-full object-cover"
-                    />
+                    <X size={14} />
+                  </button>
+                </div>
+              ),
+            )}
 
-                    {index ===
-                      0 && (
-                      <span className="absolute left-2 top-2 rounded-full bg-slate-950/80 px-2 py-1 text-[10px] font-bold text-white">
-                        Cover
-                      </span>
-                    )}
+            {newImagePreviews.map(
+              (preview, index) => (
+                <div
+                  key={`${index}-${preview.slice(
+                    0,
+                    20,
+                  )}`}
+                  className="relative overflow-hidden rounded-2xl border border-blue-200"
+                >
+                  <img
+                    src={preview}
+                    alt="New requirement"
+                    className="h-32 w-full object-cover"
+                  />
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setImages(
-                          (
-                            current
-                          ) =>
-                            current.filter(
-                              (
-                                _,
-                                imageIndex
-                              ) =>
-                                imageIndex !==
-                                index
-                            )
-                        )
-                      }
-                      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white text-slate-700 shadow"
-                    >
-                      <X
-                        size={14}
-                      />
-                    </button>
-                  </div>
-                )
-              )}
-            </div>
-          )}
+                  <span className="absolute left-2 top-2 rounded-full bg-blue-600 px-2 py-1 text-[10px] font-bold text-white">
+                    New
+                  </span>
 
-          {images.length <
-            5 && (
-            <label className="mt-3 flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-600 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      removeNewImage(index)
+                    }
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ),
+            )}
+          </div>
+
+          {totalImageCount < 20 && (
+            <label className="mt-3 flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-600">
               Add Images
 
               <input
                 type="file"
-                accept="image/*"
+                accept=".jpg,.jpeg,.png,.webp"
                 multiple
-                onChange={
-                  handleFiles
-                }
+                onChange={handleFiles}
                 className="hidden"
               />
             </label>
@@ -1469,9 +1584,8 @@ function EditRequirementModal({
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
-            onClick={
-              onClose
-            }
+            onClick={onClose}
+            disabled={saving}
             className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold"
           >
             Cancel
@@ -1479,19 +1593,21 @@ function EditRequirementModal({
 
           <button
             type="button"
-            onClick={
-              submit
+            onClick={() =>
+              void submit()
             }
-            className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-600"
+            disabled={saving}
+            className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
           >
-            Save Changes
+            {saving
+              ? "Saving..."
+              : "Save Changes"}
           </button>
         </div>
       </div>
     </div>
   );
 }
-
 function RequirementRow({
   item,
   inquiryCount,
