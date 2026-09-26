@@ -14,6 +14,7 @@ import {
 import {
   sendSellerInquiry,
 } from "../services/inquiryApiService.ts";
+import { generateAiRequirement } from "../services/aiRequirementApiService";
 import {
   useCallback,
   useEffect,
@@ -231,6 +232,8 @@ export default function Find() {
   const sellerInFlight = useRef(false);
   const sentInquiryIds = useRef(new Set<string>());
   const [submittingRequirement, setSubmittingRequirement] = useState(false);
+  const [generatingRequirement, setGeneratingRequirement] = useState(false);
+  const [generationError, setGenerationError] = useState("");
   const [submittingInquiry, setSubmittingInquiry] = useState(false);
   const resumeHandled = useRef(false);
 
@@ -1270,49 +1273,33 @@ export default function Find() {
   // ====================================================
 
   const generateRequirement =
-    () => {
-      if (
-        !composerInput.trim()
-      ) {
+    async () => {
+      const text =
+        composerInput.trim();
+
+      if (!text || generatingRequirement) {
         return;
       }
 
-      const generated =
-        generateMockRequirement(
-          composerInput,
+      setGeneratingRequirement(true);
+      setGenerationError("");
+
+      try {
+        const generated =
+          await generateAiRequirement(text);
+
+        setGeneratedRequirement(
+          generated,
         );
-
-      if (
-        composerImages.length >
-        0
-      ) {
-        generated.fields = [
-          ...generated.fields.filter(
-            (field) =>
-              !normalize(
-                field.id,
-              ).startsWith(
-                "image",
-              ),
-          ),
-          ...composerImages.map(
-            (
-              image,
-              index,
-            ) =>
-              createField(
-                `image${index + 1}`,
-                `Image ${index + 1}`,
-                image,
-                index === 0,
-              ),
-          ),
-        ];
+      } catch (error) {
+        setGenerationError(
+          error instanceof Error
+            ? error.message
+            : "AI requirement generate nahi kar saka.",
+        );
+      } finally {
+        setGeneratingRequirement(false);
       }
-
-      setGeneratedRequirement(
-        generated,
-      );
     };
 
   const updateGeneratedField =
@@ -1911,6 +1898,8 @@ export default function Find() {
   onGenerate={generateRequirement}
   onFieldChange={updateGeneratedField}
   submitting={submittingRequirement}
+  generating={generatingRequirement}
+  generationError={generationError}
   onSubmit={submitRequirement}
   onClose={() =>
     setShowAiComposer(false)
