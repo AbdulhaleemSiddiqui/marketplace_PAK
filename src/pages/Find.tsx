@@ -1,25 +1,10 @@
 import {
-  BadgeCheck,
-  CalendarDays,
   CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  CircleHelp,
   Filter,
-  MapPin,
-  MessageSquareText,
-  Mic,
-  PackageSearch,
-  Paperclip,
   Plus,
   Search,
-  Send,
   SlidersHorizontal,
   Sparkles,
-  Star,
-  UserRound,
-  WandSparkles,
   X,
 } from "lucide-react";
 import AuthModal from "../components/auth/AuthModal";
@@ -35,12 +20,9 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
-  type ReactNode,
 } from "react";
 
 import {
-  Link,
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
@@ -66,25 +48,29 @@ import {
 
 import {
   getPublicRequirements,
+  getRequirementDetails,
   getRequirementImageUrl,
   uploadRequirementImages,
+  type RequirementDetail,
   type RequirementListItem,
 } from "../services/requirementApiService";
 
-import {
-  getCitiesByCountry,
-  getCountries,
-} from "../services/locationService";
 
 import type { User } from "../types/auth";
 
 import type {
-  BuyerRequirement,
-  RequirementActivityStatus,
   RequirementField,
   SavedBuyerRequirement,
   StructuredRequirement,
 } from "../types/marketplace";
+
+import type { PublicRequirement } from "../types/find";
+import RequirementDetailModal from "../components/find/RequirementDetailModal";
+import FindFilters from "../components/find/FindFilters";
+import AiRequirementComposer from "../components/find/AiRequirementComposer";
+import FindHeader from "../components/find/FindHeader";
+import FindInfoModals from "../components/find/FindInfoModals";
+import FindResults from "../components/find/FindResults";
 
 // ======================================================
 // TYPES
@@ -107,61 +93,6 @@ type PostedDateFilter =
   | "30days";
 
 
-interface SpeechRecognitionAlternativeLike {
-  transcript: string;
-}
-
-interface SpeechRecognitionResultLike {
-  0: SpeechRecognitionAlternativeLike;
-}
-
-interface SpeechRecognitionEventLike {
-  results: {
-    [index: number]:
-      SpeechRecognitionResultLike;
-    length: number;
-  };
-}
-
-interface SpeechRecognitionLike {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start: () => void;
-  stop: () => void;
-  onresult:
-    | ((
-        event:
-          SpeechRecognitionEventLike,
-      ) => void)
-    | null;
-  onerror:
-    | (() => void)
-    | null;
-  onend:
-    | (() => void)
-    | null;
-}
-
-type SpeechRecognitionConstructor =
-  new () => SpeechRecognitionLike;
-
-interface PublicRequirement
-  extends BuyerRequirement {
-  source:
-    | "real"
-    | "demo";
-
-  activityStatus:
-    RequirementActivityStatus;
-
-  queryCount: number;
-
-  imageUrl?: string;
-
-  budgetMin?: number | null;
-  budgetMax?: number | null;
-}
 
 function toInquiryModalRequirement(
   requirement:
@@ -273,6 +204,9 @@ const PAGE_SIZE =
 
 const MAX_RANGE =
   500_000_000; // PKR 50 Crore
+
+
+
 
 
 // ======================================================
@@ -460,7 +394,22 @@ export default function Find() {
     useState<PublicRequirement | null>(
       null,
     );
+  const [
+    selectedRequirementDetails,
+    setSelectedRequirementDetails,
+  ] = useState<RequirementDetail | null>(
+    null,
+  );
 
+    const [
+      requirementDetailsLoading,
+      setRequirementDetailsLoading,
+    ] = useState(false);
+    
+    const [
+      requirementDetailsError,
+      setRequirementDetailsError,
+    ] = useState("");
   const [
     inquiryRequirement,
     setInquiryRequirement,
@@ -822,6 +771,9 @@ export default function Find() {
 
                       budgetMax:
                         item.budgetMax,
+
+                      summaryFields:
+                        item.summaryFields ?? [],
 
                       source: "real",
                     };
@@ -1239,6 +1191,54 @@ export default function Find() {
     }
   };
 
+  const handleViewRequirement =
+  async (
+    requirement: PublicRequirement,
+  ) => {
+    setSelectedRequirement(
+      requirement,
+    );
+
+    setSelectedRequirementDetails(
+      null,
+    );
+
+    setRequirementDetailsError(
+      "",
+    );
+
+    // Demo requirement ho to old popup
+    // fallback continue karega.
+    if (requirement.source !== "real") {
+      return;
+    }
+
+    setRequirementDetailsLoading(
+      true,
+    );
+
+    try {
+      const details =
+        await getRequirementDetails(
+          requirement.id,
+        );
+
+      setSelectedRequirementDetails(
+        details,
+      );
+    } catch (error) {
+      setRequirementDetailsError(
+        error instanceof Error
+          ? error.message
+          : "Requirement details could not be loaded.",
+      );
+    } finally {
+      setRequirementDetailsLoading(
+        false,
+      );
+    }
+  };
+
   const handleSendInquiry = (requirement: PublicRequirement) => {
     if (sellerInFlight.current || otpAction.current) return;
     if (requirement.activityStatus === "inactive") {
@@ -1483,121 +1483,26 @@ export default function Find() {
 
       {/* HEADER */}
 
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-[74px] max-w-[1500px] items-center justify-between px-5 sm:px-8 lg:px-12">
-
-          <Link
-            to="/find"
-            className="flex items-center gap-3"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-white">
-              <Search
-                size={18}
-              />
-            </div>
-
-            <div className="text-lg font-black">
-              Khoj
-              <span className="text-blue-600">
-                Market
-              </span>
-            </div>
-          </Link>
-
-          <div className="flex items-center gap-1">
-
-            <HeaderIcon
-              title="How It Works"
-              onClick={() =>
-                setShowHowItWorks(
-                  true,
-                )
-              }
-            >
-              <WandSparkles
-                size={19}
-              />
-            </HeaderIcon>
-
-            <HeaderIcon
-              title="Help"
-              onClick={() =>
-                setShowHelp(
-                  true,
-                )
-              }
-            >
-              <CircleHelp
-                size={19}
-              />
-            </HeaderIcon>
-
-            {!currentUser ? (
-             <button
-               type="button"
-               onClick={() => {
-                 setAuthRole("buyer");
-                 setPendingAuthAction(null);
-                 setPendingInquiryAfterAuth(null);
-                 setShowAuthModal(true);
-               }}
-               className="ml-2 rounded-xl border border-slate-950 bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-sm transition hover:bg-slate-950 hover:text-white"
-             >
-               Login
-             </button>
-            ) : (
-              <div className="relative ml-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowProfileMenu(
-                      !showProfileMenu,
-                    )
-                  }
-                  className="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                    <UserRound
-                      size={17}
-                    />
-                  </div>
-
-                  <span className="hidden text-sm font-bold md:block">
-                    {
-                      currentUser.name
-                    }
-                  </span>
-
-                  <ChevronDown
-                    size={14}
-                  />
-                </button>
-
-                {showProfileMenu && (
-                  <div className="absolute right-0 top-12 w-48 rounded-2xl border bg-white p-2 shadow-xl">
-                    <Link
-                      to="/profile"
-                      className="block rounded-xl px-3 py-2 text-sm font-semibold hover:bg-slate-50"
-                    >
-                      My Profile
-                    </Link>
-
-                    <button
-                      type="button"
-                      onClick={
-                        handleLogout
-                      }
-                      className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+      <FindHeader
+        currentUser={currentUser}
+        showProfileMenu={showProfileMenu}
+        onToggleProfileMenu={() =>
+          setShowProfileMenu(!showProfileMenu)
+        }
+        onLogin={() => {
+          setAuthRole("buyer");
+          setPendingAuthAction(null);
+          setPendingInquiryAfterAuth(null);
+          setShowAuthModal(true);
+        }}
+        onHowItWorks={() =>
+          setShowHowItWorks(true)
+        }
+        onHelp={() =>
+          setShowHelp(true)
+        }
+        onLogout={handleLogout}
+      />
 
       {/* MAIN */}
 
@@ -1673,7 +1578,7 @@ export default function Find() {
                 </button>
               </div>
 
-              <Filters
+              <FindFilters
                 country={
                   countryFilter
                 }
@@ -1753,74 +1658,18 @@ export default function Find() {
             </div>
           </aside>
 
-          {/* RESULTS */}
-
-          <section>
-
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h1 className="text-lg font-black">
-                  User Requirements
-                </h1>
-
-                <p className="mt-1 text-xs text-slate-400">
-                  {requirementsLoading
-                    ? "Loading requirements..."
-                    : `${filteredRequirements.length} requirements found`}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {paginatedRequirements.map(
-                (
-                  requirement,
-                ) => (
-                  <RequirementCard
-                    key={
-                      requirement.id
-                    }
-                    requirement={
-                      requirement
-                    }
-                    onView={() =>
-                      setSelectedRequirement(
-                        requirement,
-                      )
-                    }
-                    onInquiry={() =>
-                      handleSendInquiry(
-                        requirement,
-                      )
-                    }
-                  />
-                ),
-              )}
-            </div>
-
-            {/* PAGINATION */}
-
-            {filteredRequirements.length >
-              0 && (
-              <Pagination
-                currentPage={
-                  currentPage
-                }
-                totalPages={
-                  totalPages
-                }
-                totalItems={
-                  filteredRequirements.length
-                }
-                pageSize={
-                  PAGE_SIZE
-                }
-                onPageChange={
-                  setCurrentPage
-                }
-              />
-            )}
-          </section>
+          <FindResults
+            requirementsLoading={requirementsLoading}
+            filteredRequirements={filteredRequirements}
+            paginatedRequirements={paginatedRequirements}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={PAGE_SIZE}
+            currentUserRole={currentUser?.role}
+            onViewRequirement={handleViewRequirement}
+            onSendInquiry={handleSendInquiry}
+            onPageChange={setCurrentPage}
+          />
         </div>
       </main>
 
@@ -1846,7 +1695,7 @@ export default function Find() {
               </button>
             </div>
 
-            <Filters
+            <FindFilters
               country={
                 countryFilter
               }
@@ -1974,21 +1823,43 @@ export default function Find() {
       {/* DETAIL */}
 
       {selectedRequirement && (
-        <RequirementDetail
+        <RequirementDetailModal
           requirement={
             selectedRequirement
           }
-          onClose={() =>
+          details={
+            selectedRequirementDetails
+          }
+          loading={
+            requirementDetailsLoading
+          }
+          error={
+            requirementDetailsError
+          }
+          currentUserRole={currentUser?.role}
+          onClose={() => {
             setSelectedRequirement(
               null,
-            )
-          }
+            );
+            setSelectedRequirementDetails(
+              null,
+            );
+            setRequirementDetailsError(
+              "",
+            );
+          }}
           onInquiry={() => {
             const item =
               selectedRequirement;
 
             setSelectedRequirement(
               null,
+            );
+            setSelectedRequirementDetails(
+              null,
+            );
+            setRequirementDetailsError(
+              "",
             );
 
             handleSendInquiry(
@@ -2029,7 +1900,7 @@ export default function Find() {
       {/* AI */}
 
       {showAiComposer && (
-        <AiComposer
+        <AiRequirementComposer
   input={composerInput}
   requirement={generatedRequirement}
   setInput={setComposerInput}
@@ -2047,179 +1918,18 @@ export default function Find() {
 />
       )}
 
-      {/* HOW */}
+      {/* HOW / HELP */}
 
-      {showHowItWorks && (
-        <BasicModal
-          title="How It Works"
-          onClose={() =>
-            setShowHowItWorks(
-              false,
-            )
-          }
-        >
-          <div className="space-y-5">
-            <div className="rounded-2xl bg-blue-50 p-5">
-              <h3 className="font-black text-slate-900">
-                KhojMarket ka complete process
-              </h3>
-
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Product ya service Roman Urdu, Urdu ya English mein describe karein. Voice aur multiple images bhi use kar sakte hain.
-              </p>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              {[
-                ["1", "Requirement Add Karein", "Text, voice aur maximum 5 images ke sath requirement add karein."],
-                ["2", "Details Review Karein", "Generated fields, location, budget aur category ko review/edit karein."],
-                ["3", "Verification Complete Karein", "Phone aur requirement verification complete hone ke baad post public hoti hai."],
-                ["4", "Seller Inquiries", "Verified sellers active requirement par inquiry ya quotation bhejte hain."],
-              ].map(([number, stepTitle, description]) => (
-                <div
-                  key={number}
-                  className="rounded-2xl border border-slate-200 p-5"
-                >
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">
-                    {number}
-                  </div>
-
-                  <h4 className="mt-4 font-black">
-                    {stepTitle}
-                  </h4>
-
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
-                    {description}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-              <div className="flex gap-3">
-                <BadgeCheck className="mt-0.5 shrink-0 text-emerald-600" />
-
-                <div>
-                  <h4 className="font-black">
-                    Verified Requirement
-                  </h4>
-
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Badge requirement ki verification show karta hai. Ye automatically user ko Verified User declare nahi karta.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </BasicModal>
-      )}
-
-      {showHelp && (
-        <BasicModal
-          title="Help"
-          onClose={() =>
-            setShowHelp(
-              false,
-            )
-          }
-        >
-          <div className="space-y-5">
-            <div className="rounded-2xl bg-slate-50 p-5">
-              <h3 className="font-black">
-                Help & Icons Guide
-              </h3>
-
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Har important action ka icon aur purpose neeche diya gaya hai.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex gap-3 rounded-2xl border border-slate-200 p-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <Mic size={19} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black">Voice Input</h4>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Roman Urdu ya Urdu mein requirement bolne ke liye.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 rounded-2xl border border-slate-200 p-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <Paperclip size={19} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black">Images</h4>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Maximum 5 product/service images attach karne ke liye.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 rounded-2xl border border-slate-200 p-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <Sparkles size={19} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black">Generate Fields</h4>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Customer ke text ke hisab se relevant fields generate karta hai.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 rounded-2xl border border-slate-200 p-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <MapPin size={19} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black">Map Location</h4>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Filter mein map/current location se location select karne ke liye.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 rounded-2xl border border-slate-200 p-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <BadgeCheck size={19} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black">Verified Requirement</h4>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Requirement verification complete hone ka badge.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 rounded-2xl border border-slate-200 p-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <Send size={19} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-black">Send Inquiry</h4>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Verified seller active requirement par inquiry bhejta hai.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-              <h4 className="font-black">
-                Submit issue?
-              </h4>
-
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Red * wale fields complete karein, Country aur City select karein, aur kam az kam 1 image upload karein.
-              </p>
-            </div>
-          </div>
-        </BasicModal>
-      )}
+      <FindInfoModals
+        showHowItWorks={showHowItWorks}
+        showHelp={showHelp}
+        onCloseHowItWorks={() =>
+          setShowHowItWorks(false)
+        }
+        onCloseHelp={() =>
+          setShowHelp(false)
+        }
+      />
 
       <AuthModal
         open={showAuthModal}
@@ -2304,2205 +2014,37 @@ export default function Find() {
 // FILTERS
 // ======================================================
 
-function Filters({
-  country,
-  setCountry,
-  province,
-  setProvince,
-  city,
-  setCity,
-  area,
-  setArea,
-  postalCode,
-  setPostalCode,
-  category,
-  setCategory,
-  categories,
-  type,
-  setType,
-  activity,
-  setActivity,
-  postedDate,
-  setPostedDate,
-  minPrice,
-  setMinPrice,
-  maxPrice,
-  setMaxPrice,
-  verifiedOnly,
-  setVerifiedOnly,
-}: {
-  country: string;
-  setCountry: (value: string) => void;
 
-  province: string;
-  setProvince: (value: string) => void;
-
-  city: string;
-  setCity: (value: string) => void;
-
-  area: string;
-  setArea: (value: string) => void;
-
-  postalCode: string;
-  setPostalCode: (value: string) => void;
-
-  category: string;
-  setCategory: (value: string) => void;
-
-  categories: string[];
-
-  type: RequirementTypeFilter;
-  setType: (value: RequirementTypeFilter) => void;
-
-  activity: ActivityFilter;
-  setActivity: (value: ActivityFilter) => void;
-
-  postedDate: PostedDateFilter;
-  setPostedDate: (value: PostedDateFilter) => void;
-
-  minPrice: number;
-  setMinPrice: (value: number) => void;
-
-  maxPrice: number;
-  setMaxPrice: (value: number) => void;
-
-  verifiedOnly: boolean;
-  setVerifiedOnly: (value: boolean) => void;
-}) {
-  const [
-    countryOptions,
-    setCountryOptions,
-  ] =
-    useState<string[]>(
-      [],
-    );
-
-  const [
-    cityOptions,
-    setCityOptions,
-  ] =
-    useState<string[]>(
-      [],
-    );
-
-  const [
-    locationLoading,
-    setLocationLoading,
-  ] =
-    useState(false);
-
-
-  const [
-    showMapPicker,
-    setShowMapPicker,
-  ] =
-    useState(false);
-
-  useEffect(() => {
-    let cancelled =
-      false;
-
-    getCountries()
-      .then(
-        (items) => {
-          if (
-            !cancelled
-          ) {
-            setCountryOptions(
-              items,
-            );
-          }
-        },
-      )
-      .catch(
-        () => {
-          if (
-            !cancelled
-          ) {
-            setCountryOptions(
-              [],
-            );
-          }
-        },
-      );
-
-    return () => {
-      cancelled =
-        true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled =
-      false;
-
-    if (!country) {
-      setCityOptions(
-        [],
-      );
-
-      return () => {
-        cancelled =
-          true;
-      };
-    }
-
-    setLocationLoading(
-      true,
-    );
-
-    getCitiesByCountry(
-      country,
-    )
-      .then(
-        (items) => {
-          if (
-            !cancelled
-          ) {
-            setCityOptions(
-              items,
-            );
-          }
-        },
-      )
-      .catch(
-        () => {
-          if (
-            !cancelled
-          ) {
-            setCityOptions(
-              [],
-            );
-          }
-        },
-      )
-      .finally(
-        () => {
-          if (
-            !cancelled
-          ) {
-            setLocationLoading(
-              false,
-            );
-          }
-        },
-      );
-
-    return () => {
-      cancelled =
-        true;
-    };
-  }, [country]);
-
-  return (
-    <div className="mt-6 space-y-6">
-
-      <FilterGroup
-        title="Location"
-      >
-        <div className="grid gap-2">
-          <select
-            value={country}
-            onChange={(event) => {
-              const nextCountry =
-                event.target.value;
-
-              setCountry(
-                nextCountry,
-              );
-
-              setCity("");
-            }}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-          >
-            <option value="">
-              All Countries
-            </option>
-
-            {countryOptions.map(
-              (item) => (
-                <option
-                  key={item}
-                  value={item}
-                >
-                  {item}
-                </option>
-              ),
-            )}
-          </select>
-
-          <select
-            value={city}
-            onChange={(event) =>
-              setCity(
-                event.target.value,
-              )
-            }
-            disabled={!country}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">
-              {locationLoading
-                ? "Loading Cities..."
-                : country
-                  ? "All Cities"
-                  : "Select Country First"}
-            </option>
-
-            {cityOptions.map(
-              (item) => (
-                <option
-                  key={item}
-                  value={item}
-                >
-                  {item}
-                </option>
-              ),
-            )}
-          </select>
-
-          <input
-            value={province}
-            onChange={(event) =>
-              setProvince(
-                event.target.value,
-              )
-            }
-            placeholder="Province / State"
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-          />
-
-          <input
-            value={area}
-            onChange={(event) =>
-              setArea(
-                event.target.value,
-              )
-            }
-            placeholder="Area / Locality"
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-          />
-
-          <div className="relative">
-            <MapPin
-              size={15}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-
-            <input
-              value={postalCode}
-              onChange={(event) =>
-                setPostalCode(
-                  event.target.value,
-                )
-              }
-              placeholder="Postal Code"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-blue-500"
-            />
-          </div>
-
-
-          <button
-            type="button"
-            onClick={() =>
-              setShowMapPicker(
-                true,
-              )
-            }
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-bold text-blue-600 hover:bg-blue-100"
-          >
-            <MapPin
-              size={16}
-            />
-            Select Location on Map
-          </button>
-        </div>
-      </FilterGroup>
-
-      <FilterGroup
-        title="Category"
-      >
-        <select
-          value={
-            category
-          }
-          onChange={(
-            event,
-          ) =>
-            setCategory(
-              event.target.value,
-            )
-          }
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm"
-        >
-          <option value="all">
-            All Categories
-          </option>
-
-          {categories.map(
-            (
-              item,
-            ) => (
-              <option
-                key={
-                  item
-                }
-                value={
-                  item
-                }
-              >
-                {item}
-              </option>
-            ),
-          )}
-        </select>
-      </FilterGroup>
-
-      <FilterGroup
-        title="Range"
-      >
-        <div className="rounded-xl bg-slate-50 p-3">
-          <div className="mb-4 flex items-center justify-between text-xs font-bold text-slate-700">
-            <span>
-              {formatRangeValue(
-                minPrice,
-              )}
-            </span>
-
-            <span>
-              {formatRangeValue(
-                maxPrice,
-              )}
-            </span>
-          </div>
-
-          <div className="relative h-7">
-            <div className="absolute left-0 right-0 top-3 h-1.5 rounded-full bg-slate-200" />
-
-            <div
-              className="absolute top-3 h-1.5 rounded-full bg-blue-600"
-              style={{
-                left: `${(
-                  minPrice /
-                  MAX_RANGE
-                ) * 100}%`,
-                right: `${100 - (
-                  maxPrice /
-                  MAX_RANGE
-                ) * 100}%`,
-              }}
-            />
-
-            <input
-              type="range"
-              min={0}
-              max={MAX_RANGE}
-              step={100_000}
-              value={minPrice}
-              onChange={(event) => {
-                const next = Math.min(
-                  Number(
-                    event.target.value,
-                  ),
-                  maxPrice,
-                );
-
-                setMinPrice(
-                  next,
-                );
-              }}
-              className="pointer-events-none absolute inset-0 h-7 w-full appearance-none bg-transparent
-                [&::-webkit-slider-runnable-track]:h-1.5
-                [&::-webkit-slider-runnable-track]:bg-transparent
-                [&::-webkit-slider-thumb]:pointer-events-auto
-                [&::-webkit-slider-thumb]:mt-[-5px]
-                [&::-webkit-slider-thumb]:h-4
-                [&::-webkit-slider-thumb]:w-4
-                [&::-webkit-slider-thumb]:appearance-none
-                [&::-webkit-slider-thumb]:rounded-full
-                [&::-webkit-slider-thumb]:border-2
-                [&::-webkit-slider-thumb]:border-blue-600
-                [&::-webkit-slider-thumb]:bg-white
-                [&::-moz-range-track]:bg-transparent
-                [&::-moz-range-thumb]:pointer-events-auto
-                [&::-moz-range-thumb]:h-4
-                [&::-moz-range-thumb]:w-4
-                [&::-moz-range-thumb]:rounded-full
-                [&::-moz-range-thumb]:border-2
-                [&::-moz-range-thumb]:border-blue-600
-                [&::-moz-range-thumb]:bg-white"
-            />
-
-            <input
-              type="range"
-              min={0}
-              max={MAX_RANGE}
-              step={100_000}
-              value={maxPrice}
-              onChange={(event) => {
-                const next = Math.max(
-                  Number(
-                    event.target.value,
-                  ),
-                  minPrice,
-                );
-
-                setMaxPrice(
-                  next,
-                );
-              }}
-              className="pointer-events-none absolute inset-0 h-7 w-full appearance-none bg-transparent
-                [&::-webkit-slider-runnable-track]:h-1.5
-                [&::-webkit-slider-runnable-track]:bg-transparent
-                [&::-webkit-slider-thumb]:pointer-events-auto
-                [&::-webkit-slider-thumb]:mt-[-5px]
-                [&::-webkit-slider-thumb]:h-4
-                [&::-webkit-slider-thumb]:w-4
-                [&::-webkit-slider-thumb]:appearance-none
-                [&::-webkit-slider-thumb]:rounded-full
-                [&::-webkit-slider-thumb]:border-2
-                [&::-webkit-slider-thumb]:border-blue-600
-                [&::-webkit-slider-thumb]:bg-white
-                [&::-moz-range-track]:bg-transparent
-                [&::-moz-range-thumb]:pointer-events-auto
-                [&::-moz-range-thumb]:h-4
-                [&::-moz-range-thumb]:w-4
-                [&::-moz-range-thumb]:rounded-full
-                [&::-moz-range-thumb]:border-2
-                [&::-moz-range-thumb]:border-blue-600
-                [&::-moz-range-thumb]:bg-white"
-            />
-          </div>
-
-          <div className="mt-1 flex justify-between text-[10px] font-semibold text-slate-400">
-            <span>PKR 0</span>
-            <span>PKR 50 Cr</span>
-          </div>
-        </div>
-      </FilterGroup>
-
-      <FilterGroup
-        title="Requirement Type"
-      >
-        <div className="flex flex-wrap items-center gap-4">
-          <Radio
-            label="All"
-            checked={
-              type ===
-              "all"
-            }
-            onChange={() =>
-              setType(
-                "all",
-              )
-            }
-          />
-
-          <Radio
-            label="Product"
-            checked={
-              type ===
-              "product"
-            }
-            onChange={() =>
-              setType(
-                "product",
-              )
-            }
-          />
-
-          <Radio
-            label="Service"
-            checked={
-              type ===
-              "service"
-            }
-            onChange={() =>
-              setType(
-                "service",
-              )
-            }
-          />
-        </div>
-      </FilterGroup>
-
-      <FilterGroup
-        title="Posted Date"
-      >
-        <Radio
-          label="Any Time"
-          checked={
-            postedDate ===
-            "any"
-          }
-          onChange={() =>
-            setPostedDate(
-              "any",
-            )
-          }
-        />
-
-        <Radio
-          label="Today"
-          checked={
-            postedDate ===
-            "today"
-          }
-          onChange={() =>
-            setPostedDate(
-              "today",
-            )
-          }
-        />
-
-        <Radio
-          label="Last 7 Days"
-          checked={
-            postedDate ===
-            "7days"
-          }
-          onChange={() =>
-            setPostedDate(
-              "7days",
-            )
-          }
-        />
-
-        <Radio
-          label="Last 30 Days"
-          checked={
-            postedDate ===
-            "30days"
-          }
-          onChange={() =>
-            setPostedDate(
-              "30days",
-            )
-          }
-        />
-      </FilterGroup>
-
-      <FilterGroup
-        title="Post Status"
-      >
-        <div className="flex flex-wrap items-center gap-4">
-          <Radio
-            label="All"
-            checked={
-              activity ===
-              "all"
-            }
-            onChange={() =>
-              setActivity(
-                "all",
-              )
-            }
-          />
-
-          <Radio
-            label="Active"
-            checked={
-              activity ===
-              "active"
-            }
-            onChange={() =>
-              setActivity(
-                "active",
-              )
-            }
-          />
-
-          <Radio
-            label="Inactive"
-            checked={
-              activity ===
-              "inactive"
-            }
-            onChange={() =>
-              setActivity(
-                "inactive",
-              )
-            }
-          />
-        </div>
-      </FilterGroup>
-
-      <FilterGroup
-        title="Trust"
-      >
-        <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold">
-          <input
-            type="checkbox"
-            checked={
-              verifiedOnly
-            }
-            onChange={(
-              event,
-            ) =>
-              setVerifiedOnly(
-                event.target.checked,
-              )
-            }
-          />
-
-          Verified Requirements
-        </label>
-      </FilterGroup>
-
-      {showMapPicker && (
-        <MapLocationModal
-          onClose={() =>
-            setShowMapPicker(
-              false,
-            )
-          }
-          onUseLocation={(
-            latitude,
-            longitude,
-          ) => {
-            setArea(
-              `${latitude.toFixed(
-                5,
-              )}, ${longitude.toFixed(
-                5,
-              )}`,
-            );
-
-            setShowMapPicker(
-              false,
-            );
-          }}
-        />
-      )}
-    </div>
-  );
-}
 
 // ======================================================
 // CARD
 // ======================================================
 
-function RequirementCard({
-  requirement,
-  onView,
-  onInquiry,
-}: {
-  requirement: PublicRequirement;
-  onView: () => void;
-  onInquiry: () => void;
-}) {
-  const active =
-    requirement.activityStatus ===
-    "active";
-
-  return (
-    <article
-      className={`rounded-[24px] border bg-white p-4 shadow-sm transition sm:p-5 ${
-        active
-          ? "border-slate-200 hover:border-blue-200 hover:shadow-lg"
-          : "border-slate-200 opacity-80"
-      }`}
-    >
-      <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
-        {/* IMAGE */}
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-          {requirement.imageUrl ? (
-            <img
-              src={
-                requirement.imageUrl
-              }
-              alt={
-                requirement.title
-              }
-              className="h-48 w-full object-cover md:h-full md:min-h-[220px]"
-            />
-          ) : (
-            <div className="flex h-48 items-center justify-center text-slate-400 md:h-full md:min-h-[220px]">
-              <div className="text-center">
-                <PackageSearch
-                  size={32}
-                  className="mx-auto"
-                />
-
-                <p className="mt-2 text-xs font-semibold">
-                  No image provided
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* CONTENT */}
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100">
-              <UserRound
-                size={18}
-              />
-            </div>
-
-            <div>
-              <p className="text-sm font-black">
-                {
-                  requirement.userName
-                }
-              </p>
-
-              <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                <Star
-                  size={13}
-                  className="fill-amber-400 text-amber-400"
-                />
-
-                <strong>
-                  {
-                    requirement.userRating
-                  }
-                </strong>
-
-                <span>
-                  (
-                  {
-                    requirement.userReviewCount
-                  }{" "}
-                  reviews)
-                </span>
-              </div>
-            </div>
-
-            <div className="ml-auto flex flex-wrap gap-2">
-              <StatusBadge
-                active={
-                  active
-                }
-              />
-
-              {requirement.verified && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-600">
-                  <BadgeCheck
-                    size={14}
-                  />
-                  Verified Requirement
-                </span>
-              )}
-
-              <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold">
-                {requirement.requirementType ===
-                "service"
-                  ? "Service"
-                  : "Product"}
-              </span>
-            </div>
-          </div>
-
-          <h2 className="mt-5 text-xl font-black">
-            {
-              requirement.title
-            }
-          </h2>
-
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            {
-              requirement.description
-            }
-          </p>
-
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500">
-            <span className="inline-flex items-center gap-2">
-              <MapPin
-                size={15}
-              />
-              {
-                requirement.location
-              }
-            </span>
-
-            {requirement.category && (
-              <span className="inline-flex items-center gap-2">
-                <PackageSearch
-                  size={15}
-                />
-                {
-                  requirement.category
-                }
-              </span>
-            )}
-
-            {requirement.budget && (
-              <strong className="text-slate-950">
-                {
-                  requirement.budget
-                }
-              </strong>
-            )}
-
-            {requirement.createdAt && (
-              <span className="inline-flex items-center gap-2">
-                <CalendarDays
-                  size={15}
-                />
-                {new Date(
-                  requirement.createdAt,
-                ).toLocaleDateString(
-                  "en-GB",
-                  {
-                    day:
-                      "2-digit",
-                    month:
-                      "short",
-                    year:
-                      "numeric",
-                  },
-                )}
-              </span>
-            )}
-          </div>
-
-          <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800">
-            <span className="inline-flex items-center gap-2">
-              <MessageSquareText
-                size={16}
-                className="text-blue-600"
-              />
-              {
-                requirement.queryCount
-              }{" "}
-              Queries Submitted
-            </span>
-          </div>
-
-          <div className="mt-5 flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              onClick={
-                onView
-              }
-              className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold hover:border-slate-300"
-            >
-              View Requirement
-            </button>
-
-            {active ? (
-              <button
-                type="button"
-                onClick={
-                  onInquiry
-                }
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700"
-              >
-                <Send
-                  size={16}
-                />
-                Send Inquiry
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="cursor-not-allowed rounded-xl bg-slate-200 px-5 py-3 text-sm font-bold text-slate-500"
-              >
-                Requirement Closed
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-// ======================================================
-// PAGINATION
-// ======================================================
-
-function Pagination({
-  currentPage,
-  totalPages,
-  totalItems,
-  pageSize,
-  onPageChange,
-}: {
-  currentPage: number;
-  totalPages: number;
-  totalItems: number;
-  pageSize: number;
-  onPageChange: (page: number) => void;
-}) {
-  const start =
-    (currentPage -
-      1) *
-      pageSize +
-    1;
-
-  const end =
-    Math.min(
-      currentPage *
-        pageSize,
-      totalItems,
-    );
-
-  const pages =
-    Array.from(
-      {
-        length:
-          totalPages,
-      },
-      (
-        _,
-        index,
-      ) =>
-        index + 1,
-    );
-
-  return (
-    <div className="mt-7 flex flex-col items-center justify-between gap-4 rounded-[20px] border border-slate-200 bg-white px-4 py-4 sm:flex-row">
-
-      <p className="text-sm text-slate-500">
-        Showing{" "}
-        <strong>
-          {start}
-        </strong>{" "}
-        –{" "}
-        <strong>
-          {end}
-        </strong>{" "}
-        of{" "}
-        <strong>
-          {totalItems}
-        </strong>
-      </p>
-
-      <div className="flex items-center gap-1">
-
-        <button
-          type="button"
-          disabled={
-            currentPage ===
-            1
-          }
-          onClick={() =>
-            onPageChange(
-              currentPage -
-                1,
-            )
-          }
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 disabled:opacity-40"
-        >
-          <ChevronLeft
-            size={16}
-          />
-        </button>
-
-        {pages.map(
-          (
-            page,
-          ) => (
-            <button
-              key={
-                page
-              }
-              type="button"
-              onClick={() =>
-                onPageChange(
-                  page,
-                )
-              }
-              className={`h-9 min-w-9 rounded-lg px-2 text-sm font-bold ${
-                page ===
-                currentPage
-                  ? "bg-slate-950 text-white"
-                  : "border border-slate-200 bg-white"
-              }`}
-            >
-              {page}
-            </button>
-          ),
-        )}
-
-        <button
-          type="button"
-          disabled={
-            currentPage ===
-            totalPages
-          }
-          onClick={() =>
-            onPageChange(
-              currentPage +
-                1,
-            )
-          }
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 disabled:opacity-40"
-        >
-          <ChevronRight
-            size={16}
-          />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ======================================================
 // DETAIL
 // ======================================================
-
-function RequirementDetail({
-  requirement,
-  onClose,
-  onInquiry,
-}: {
-  requirement: PublicRequirement;
-  onClose: () => void;
-  onInquiry: () => void;
-}) {
-  const active =
-    requirement.activityStatus ===
-    "active";
-
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-2xl rounded-[28px] bg-white p-7">
-
-        <div className="flex justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <strong>
-                {
-                  requirement.userName
-                }
-              </strong>
-
-              <BadgeCheck
-                size={16}
-                className="text-blue-600"
-              />
-            </div>
-
-            <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-              <Star
-                size={13}
-                className="fill-amber-400 text-amber-400"
-              />
-
-              {
-                requirement.userRating
-              }
-            </div>
-          </div>
-
-          <button
-            onClick={
-              onClose
-            }
-          >
-            <X />
-          </button>
-        </div>
-
-        <div className="mt-5 flex gap-2">
-          <StatusBadge
-            active={
-              active
-            }
-          />
-
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-600">
-            Verified Requirement
-          </span>
-        </div>
-
-        <h2 className="mt-4 text-2xl font-black">
-          {
-            requirement.title
-          }
-        </h2>
-
-        <p className="mt-3 leading-7 text-slate-600">
-          {
-            requirement.description
-          }
-        </p>
-
-        <div className="mt-5 rounded-xl bg-slate-50 p-4 font-bold">
-          {
-            requirement.queryCount
-          }{" "}
-          Queries Submitted
-        </div>
-
-        <button
-          type="button"
-          disabled={
-            !active
-          }
-          onClick={
-            onInquiry
-          }
-          className={`mt-6 w-full rounded-xl px-4 py-3 font-bold ${
-            active
-              ? "bg-blue-600 text-white"
-              : "cursor-not-allowed bg-slate-200 text-slate-500"
-          }`}
-        >
-          {active
-            ? "Send Inquiry"
-            : "Requirement Closed"}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ======================================================
 // AI COMPOSER
 // ======================================================
 
-function AiComposer({
-  input,
-  requirement,
-  setInput,
-  images,
-  setImages,
-  imageFiles,
-  setImageFiles,
-  onGenerate,
-  onFieldChange,
-  onSubmit,
-  submitting,
-  onClose,
-}: {
-  input: string;
-  requirement: StructuredRequirement | null;
-  setInput: (value: string) => void;
-  images: string[];
-  setImages: (value: string[]) => void;
-  imageFiles: File[];
-  setImageFiles: (
-    value: File[]
-  ) => void;
 
-  onGenerate: () => void;
-  onFieldChange: (
-    fieldId: string,
-    value: string,
-  ) => void;
-  onSubmit: () => void;
-  submitting: boolean;
-  onClose: () => void;
-}) {
-  const fileRef =
-    useRef<HTMLInputElement | null>(
-      null,
-    );
-
-
-  const [
-    isListening,
-    setIsListening,
-  ] =
-    useState(false);
-
-
-  const [
-    showValidation,
-    setShowValidation,
-  ] =
-    useState(false);
-
-  const imageMissing =
-    showValidation &&
-    images.length === 0;
-
-  const isFieldMissing = (
-    field:
-      RequirementField,
-  ) =>
-    showValidation &&
-    field.required &&
-    !field.value.trim();
-
-  const startVoiceInput =
-    () => {
-      const browserWindow =
-        window as typeof window & {
-          SpeechRecognition?:
-            SpeechRecognitionConstructor;
-          webkitSpeechRecognition?:
-            SpeechRecognitionConstructor;
-        };
-
-      const Recognition =
-        browserWindow.SpeechRecognition ??
-        browserWindow.webkitSpeechRecognition;
-
-      if (!Recognition) {
-        alert(
-          "Voice input is not supported in this browser. Chrome or Edge use karein.",
-        );
-        return;
-      }
-
-      const recognition =
-        new Recognition();
-
-      recognition.lang =
-        "en-PK";
-      recognition.interimResults =
-        false;
-      recognition.continuous =
-        false;
-
-      recognition.onresult =
-        (
-          event,
-        ) => {
-          const transcript =
-            event.results[
-              event.results.length -
-                1
-            ]?.[0]?.transcript?.trim();
-
-          if (
-            transcript
-          ) {
-            setInput(
-              input.trim()
-                ? `${input.trim()} ${transcript}`
-                : transcript,
-            );
-          }
-        };
-
-      recognition.onerror =
-        () => {
-          setIsListening(
-            false,
-          );
-        };
-
-      recognition.onend =
-        () => {
-          setIsListening(
-            false,
-          );
-        };
-
-      try {
-        setIsListening(
-          true,
-        );
-
-        recognition.start();
-      } catch {
-        setIsListening(
-          false,
-        );
-      }
-    };
-
-  const [
-    countryOptions,
-    setCountryOptions,
-  ] =
-    useState<string[]>(
-      [],
-    );
-
-  const countryValue =
-    requirement?.fields.find(
-      (field) =>
-        normalize(
-          field.id,
-        ) ===
-        "country",
-    )?.value ?? "";
-
-  const [
-    cityOptions,
-    setCityOptions,
-  ] =
-    useState<string[]>(
-      [],
-    );
-
-  useEffect(() => {
-    getCountries()
-      .then(
-        setCountryOptions,
-      )
-      .catch(
-        () =>
-          setCountryOptions(
-            [],
-          ),
-      );
-  }, []);
-
-  useEffect(() => {
-    if (!countryValue) {
-      setCityOptions(
-        [],
-      );
-
-      return;
-    }
-
-    getCitiesByCountry(
-      countryValue,
-    )
-      .then(
-        setCityOptions,
-      )
-      .catch(
-        () =>
-          setCityOptions(
-            [],
-          ),
-      );
-  }, [
-    countryValue,
-  ]);
-
-  const attach = (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
-    const availableSlots =
-      Math.max(
-        0,
-        20 - imageFiles.length,
-      );
-  
-    const files =
-      Array.from(
-        event.target.files ?? [],
-      ).slice(
-        0,
-        availableSlots,
-      );
-  
-    if (files.length === 0) {
-      event.target.value = "";
-      return;
-    }
-  
-    // Actual File objects backend upload ke liye.
-    setImageFiles([
-      ...imageFiles,
-      ...files,
-    ]);
-  
-    // Base64 sirf UI preview ke liye.
-    Promise.all(
-      files.map(
-        (file) =>
-          new Promise<string>(
-            (resolve, reject) => {
-              const reader =
-                new FileReader();
-  
-              reader.onload = () => {
-                if (
-                  typeof reader.result ===
-                  "string"
-                ) {
-                  resolve(
-                    reader.result,
-                  );
-                } else {
-                  reject();
-                }
-              };
-  
-              reader.onerror = () =>
-                reject();
-  
-              reader.readAsDataURL(
-                file,
-              );
-            },
-          ),
-      ),
-    )
-      .then((newImages) => {
-        setImages(
-          [
-            ...images,
-            ...newImages,
-          ].slice(0, 20),
-        );
-      })
-      .catch(() => {
-        // Preview failure should not crash UI.
-      });
-  
-    event.target.value = "";
-  };
-
-  const removeImage = (
-    index: number,
-  ) => {
-    setImages(
-      images.filter(
-        (_, imageIndex) =>
-          imageIndex !== index,
-      ),
-    );
-  
-    setImageFiles(
-      imageFiles.filter(
-        (_, imageIndex) =>
-          imageIndex !== index,
-      ),
-    );
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-[28px] bg-white p-6">
-
-        <div className="flex justify-between">
-          <div>
-            <h2 className="text-xl font-black">
-              Add Requirement
-            </h2>
-
-          </div>
-
-          <button
-            onClick={
-              onClose
-            }
-          >
-            <X />
-          </button>
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-
-          <textarea
-            rows={5}
-            value={
-              input
-            }
-            onChange={(
-              event,
-            ) =>
-              setInput(
-                event.target.value,
-              )
-            }
-            placeholder="Mujhe Lahore mein laptop chahiye..."
-            className="w-full resize-none bg-transparent p-2 outline-none"
-          />
-
-          {isListening && (
-            <div className="mt-2 text-xs font-semibold text-red-600">
-              Listening... bolain
-            </div>
-          )}
-
-          <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
-
-            <div className="flex gap-2">
-
-              <input
-                ref={
-                  fileRef
-                }
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={
-                  attach
-                }
-                className="hidden"
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  fileRef.current?.click()
-                }
-                className="rounded-xl p-2 text-slate-500 hover:bg-white"
-              >
-                <Paperclip />
-              </button>
-
-              <button
-                type="button"
-                onClick={
-                  startVoiceInput
-                }
-                className={`rounded-xl p-2 transition ${
-                  isListening
-                    ? "bg-red-50 text-red-600"
-                    : "text-slate-500 hover:bg-white"
-                }`}
-                title={
-                  isListening
-                    ? "Listening..."
-                    : "Voice input"
-                }
-              >
-                <Mic
-                  className={
-                    isListening
-                      ? "animate-pulse"
-                      : ""
-                  }
-                />
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={
-                onGenerate
-              }
-              disabled={
-                !input.trim()
-              }
-              className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white ${
-                input.trim()
-                  ? "bg-blue-600 hover:bg-blue-700"
-                  : "cursor-not-allowed bg-slate-300"
-              }`}
-            >
-              <Sparkles
-                size={15}
-              />
-
-              Generate
-            </button>
-          </div>
-        </div>
-
-        {requirement && (
-          <div className="mt-6 rounded-2xl border border-slate-200 p-5">
-
-            <h3 className="text-lg font-black">
-              {
-                requirement.title
-              }
-            </h3>
-
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              {requirement.fields
-                .filter(
-                  (field) =>
-                    !normalize(
-                      field.id,
-                    ).startsWith(
-                      "image",
-                    ),
-                )
-                .map(
-                (
-                  field,
-                ) => (
-                  <div
-                    key={
-                      field.id
-                    }
-                  >
-                    <span className="mb-1 block text-xs font-bold text-slate-500">
-                      {
-                        field.label
-                      }
-
-                      {field.required && (
-                        <span className="ml-1 text-red-500">
-                          *
-                        </span>
-                      )}
-                    </span>
-
-                    {normalize(
-                      field.id,
-                    ) ===
-                    "country" ? (
-                      <select
-                        value={
-                          field.value
-                        }
-                        onChange={(
-                          event,
-                        ) => {
-                          onFieldChange(
-                            field.id,
-                            event.target.value,
-                          );
-
-                          const cityField =
-                            requirement.fields.find(
-                              (
-                                item,
-                              ) =>
-                                normalize(
-                                  item.id,
-                                ) ===
-                                "city",
-                            );
-
-                          if (
-                            cityField
-                          ) {
-                            onFieldChange(
-                              cityField.id,
-                              "",
-                            );
-                          }
-                        }}
-                        className={`w-full rounded-xl border bg-white px-3 py-3 outline-none ${
-                          isFieldMissing(
-                            field,
-                          )
-                            ? "border-red-500 ring-2 ring-red-100"
-                            : "border-slate-200 focus:border-blue-500"
-                        }`}
-                      >
-                        <option value="">
-                          Select Country
-                        </option>
-
-                        {countryOptions.map(
-                          (item) => (
-                            <option
-                              key={item}
-                              value={item}
-                            >
-                              {item}
-                            </option>
-                          ),
-                        )}
-                      </select>
-                    ) : normalize(
-                        field.id,
-                      ) ===
-                      "city" ? (
-                      <select
-                        value={
-                          field.value
-                        }
-                        onChange={(
-                          event,
-                        ) =>
-                          onFieldChange(
-                            field.id,
-                            event.target.value,
-                          )
-                        }
-                        disabled={
-                          !countryValue
-                        }
-                        className={`w-full rounded-xl border bg-white px-3 py-3 outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
-                          isFieldMissing(
-                            field,
-                          )
-                            ? "border-red-500 ring-2 ring-red-100"
-                            : "border-slate-200 focus:border-blue-500"
-                        }`}
-                      >
-                        <option value="">
-                          {countryValue
-                            ? "Select City"
-                            : "Select Country First"}
-                        </option>
-
-                        {cityOptions.map(
-                          (item) => (
-                            <option
-                              key={item}
-                              value={item}
-                            >
-                              {item}
-                            </option>
-                          ),
-                        )}
-                      </select>
-                    ) : normalize(
-                        field.id,
-                      ) ===
-                      "budget" ? (
-                      <BudgetRangeInput
-                        value={field.value}
-                        onChange={(value) =>
-                          onFieldChange(
-                            field.id,
-                            value,
-                          )
-                        }
-                      />
-                    ) : (
-                      <input
-                        value={
-                          field.value
-                        }
-                        onChange={(
-                          event,
-                        ) =>
-                          onFieldChange(
-                            field.id,
-                            event.target.value,
-                          )
-                        }
-                        className={`w-full rounded-xl border px-3 py-3 outline-none ${
-                          isFieldMissing(
-                            field,
-                          )
-                            ? "border-red-500 ring-2 ring-red-100"
-                            : "border-slate-200 focus:border-blue-500"
-                        }`}
-                      />
-                    )}
-
-                    {isFieldMissing(
-                      field,
-                    ) && (
-                      <p className="mt-1.5 text-xs font-semibold text-red-500">
-                        {field.label} is required.
-                      </p>
-                    )}
-                  </div>
-                ),
-              )}
-            </div>
-
-            <div className="mt-5">
-              <div className="mb-2 flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-600">
-                  Requirement Images
-                  <span className="ml-1 text-red-500">
-                    *
-                  </span>
-                </label>
-
-                <span className="text-xs text-slate-400">
-                  {images.length}/5
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  fileRef.current?.click()
-                }
-                className={`flex min-h-28 w-full items-center justify-center rounded-2xl border-2 border-dashed p-4 transition ${
-                  imageMissing
-                    ? "border-red-400 bg-red-50"
-                    : "border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/50"
-                }`}
-              >
-                <div className="text-center">
-                  <Paperclip
-                    size={25}
-                    className="mx-auto text-slate-400"
-                  />
-
-                  <p className="mt-2 text-sm font-bold text-slate-700">
-                    Images upload karein
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    Maximum 5 images — JPG, PNG, WEBP
-                  </p>
-                </div>
-              </button>
-
-              {imageMissing && (
-                <p className="mt-1.5 text-xs font-semibold text-red-500">
-                  Kam az kam 1 requirement image required hai.
-                </p>
-              )}
-
-              {images.length >
-                0 && (
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {images.map(
-                    (
-                      image,
-                      index,
-                    ) => (
-                      <div
-                        key={index}
-                        className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
-                      >
-                        <img
-                          src={image}
-                          alt={`Requirement ${index + 1}`}
-                          className="h-28 w-full object-cover"
-                        />
-
-                        {index ===
-                          0 && (
-                          <span className="absolute bottom-2 left-2 rounded-full bg-slate-950/75 px-2 py-1 text-[10px] font-bold text-white">
-                            Cover
-                          </span>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            removeImage(
-                              index,
-                            )
-                          }
-                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-slate-950/75 text-white"
-                          title="Remove image"
-                        >
-                          <X
-                            size={14}
-                          />
-                        </button>
-                      </div>
-                    ),
-                  )}
-                </div>
-              )}
-            </div>
-
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => {
-                setShowValidation(
-                  true,
-                );
-
-                onSubmit();
-              }}
-              className="mt-6 w-full rounded-xl bg-slate-950 px-5 py-3 font-bold text-white"
-            >
-              {submitting ? "Submitting..." : "Submit Requirement"}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ======================================================
 // COMMON
 // ======================================================
 
-function HeaderIcon({
-  title,
-  children,
-  onClick,
-}: {
-  title: string;
-  children: ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={
-        title
-      }
-      onClick={
-        onClick
-      }
-      className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100"
-    >
-      {children}
-    </button>
-  );
-}
-
-function StatusBadge({
-  active,
-}: {
-  active: boolean;
-}) {
-  return (
-    <span
-      className={`rounded-full px-3 py-1.5 text-xs font-black ${
-        active
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-slate-100 text-slate-500"
-      }`}
-    >
-      {active
-        ? "ACTIVE"
-        : "INACTIVE"}
-    </span>
-  );
-}
 
 
-function FilterGroup({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <div>
-      <p className="mb-3 text-xs font-black uppercase tracking-wider text-slate-400">
-        {title}
-      </p>
-
-      <div className="space-y-2">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Radio({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-slate-600">
-      <input
-        type="radio"
-        checked={
-          checked
-        }
-        onChange={
-          onChange
-        }
-      />
-
-      {label}
-    </label>
-  );
-}
 
 
-function MapLocationModal({
-  onClose,
-  onUseLocation,
-}: {
-  onClose: () => void;
-  onUseLocation: (
-    latitude: number,
-    longitude: number,
-  ) => void;
-}) {
-  const [
-    latitude,
-    setLatitude,
-  ] =
-    useState(31.5204);
 
-  const [
-    longitude,
-    setLongitude,
-  ] =
-    useState(74.3587);
 
-  const [
-    loading,
-    setLoading,
-  ] =
-    useState(false);
 
-  const useCurrentLocation =
-    () => {
-      if (
-        !navigator.geolocation
-      ) {
-        alert(
-          "Browser location support available nahi hai.",
-        );
 
-        return;
-      }
 
-      setLoading(
-        true,
-      );
 
-      navigator.geolocation.getCurrentPosition(
-        (
-          position,
-        ) => {
-          setLatitude(
-            position.coords.latitude,
-          );
 
-          setLongitude(
-            position.coords.longitude,
-          );
-
-          setLoading(
-            false,
-          );
-        },
-        () => {
-          setLoading(
-            false,
-          );
-
-          alert(
-            "Location access allow karein.",
-          );
-        },
-      );
-    };
-
-  const delta =
-    0.03;
-
-  const mapUrl =
-    `https://www.openstreetmap.org/export/embed.html?bbox=${
-      longitude - delta
-    }%2C${
-      latitude - delta
-    }%2C${
-      longitude + delta
-    }%2C${
-      latitude + delta
-    }&layer=mapnik&marker=${latitude}%2C${longitude}`;
-
-  return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/50 p-4">
-      <div className="w-full max-w-3xl overflow-hidden rounded-[28px] bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-          <div>
-            <h2 className="text-xl font-black">
-              Select Location on Map
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Current location use karein ya latitude / longitude adjust karein.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl p-2 hover:bg-slate-100"
-          >
-            <X />
-          </button>
-        </div>
-
-        <div className="p-6">
-          <div className="overflow-hidden rounded-2xl border border-slate-200">
-            <iframe
-              title="Location map"
-              src={mapUrl}
-              className="h-80 w-full"
-            />
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <label>
-              <span className="mb-1 block text-xs font-bold text-slate-500">
-                Latitude
-              </span>
-
-              <input
-                type="number"
-                step="0.00001"
-                value={latitude}
-                onChange={(event) =>
-                  setLatitude(
-                    Number(
-                      event.target.value,
-                    ),
-                  )
-                }
-                className="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-blue-500"
-              />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-xs font-bold text-slate-500">
-                Longitude
-              </span>
-
-              <input
-                type="number"
-                step="0.00001"
-                value={longitude}
-                onChange={(event) =>
-                  setLongitude(
-                    Number(
-                      event.target.value,
-                    ),
-                  )
-                }
-                className="w-full rounded-xl border border-slate-200 px-3 py-3 outline-none focus:border-blue-500"
-              />
-            </label>
-          </div>
-
-          <div className="mt-5 flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              onClick={useCurrentLocation}
-              className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold hover:bg-slate-50"
-            >
-              {loading
-                ? "Getting Location..."
-                : "Use My Current Location"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                onUseLocation(
-                  latitude,
-                  longitude,
-                )
-              }
-              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700"
-            >
-              Use This Location
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BasicModal({
-  title,
-  children,
-  onClose,
-}: {
-  title: string;
-  children: ReactNode;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[28px] bg-white p-6 shadow-2xl">
-
-        <div className="flex justify-between">
-          <h2 className="text-xl font-black">
-            {title}
-          </h2>
-
-          <button
-            onClick={
-              onClose
-            }
-          >
-            <X />
-          </button>
-        </div>
-
-        <div className="mt-5">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ======================================================
 // HELPERS
@@ -4608,25 +2150,7 @@ function matchesPostedDate(
 }
 
 
-function formatRangeValue(
-  value: number,
-) {
-  if (value >= 10_000_000) {
-    const crore =
-      value / 10_000_000;
 
-    return `PKR ${Number.isInteger(crore) ? crore : crore.toFixed(1)} Cr`;
-  }
-
-  if (value >= 100_000) {
-    const lakh =
-      value / 100_000;
-
-    return `PKR ${Number.isInteger(lakh) ? lakh : lakh.toFixed(1)} Lac`;
-  }
-
-  return `PKR ${value.toLocaleString()}`;
-}
 
 function createLocationFields(
   input: string,
@@ -4708,123 +2232,7 @@ function createField(
   };
 }
 
-function BudgetRangeInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const parsed =
-    value
-      .replace(/,/g, "")
-      .match(/\d+/g)
-      ?.map(Number) ?? [];
 
-  const [minBudget, setMinBudget] =
-    useState(
-      parsed.length >= 2
-        ? Math.min(parsed[0], parsed[1])
-        : 0,
-    );
-
-  const [maxBudget, setMaxBudget] =
-    useState(
-      parsed.length >= 2
-        ? Math.max(parsed[0], parsed[1])
-        : parsed.length === 1
-          ? parsed[0]
-          : MAX_RANGE,
-    );
-
-  const update = (
-    nextMin: number,
-    nextMax: number,
-  ) => {
-    const safeMin = Math.min(nextMin, nextMax);
-    const safeMax = Math.max(nextMin, nextMax);
-
-    setMinBudget(safeMin);
-    setMaxBudget(safeMax);
-
-    onChange(
-      `${formatRangeValue(safeMin)} - ${formatRangeValue(safeMax)}`,
-    );
-  };
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-      <div className="mb-4 flex items-center justify-between gap-3 text-xs font-bold text-slate-700">
-        <span>{formatRangeValue(minBudget)}</span>
-        <span>{formatRangeValue(maxBudget)}</span>
-      </div>
-
-      <div className="relative h-7">
-        <div className="absolute left-0 right-0 top-3 h-1.5 rounded-full bg-slate-200" />
-
-        <div
-          className="absolute top-3 h-1.5 rounded-full bg-blue-600"
-          style={{
-            left: `${(minBudget / MAX_RANGE) * 100}%`,
-            right: `${100 - (maxBudget / MAX_RANGE) * 100}%`,
-          }}
-        />
-
-        <input
-          type="range"
-          min={0}
-          max={MAX_RANGE}
-          step={100_000}
-          value={minBudget}
-          onChange={(event) =>
-            update(
-              Math.min(Number(event.target.value), maxBudget),
-              maxBudget,
-            )
-          }
-          className="pointer-events-none absolute inset-0 h-7 w-full appearance-none bg-transparent
-            [&::-webkit-slider-runnable-track]:h-1.5
-            [&::-webkit-slider-runnable-track]:bg-transparent
-            [&::-webkit-slider-thumb]:pointer-events-auto
-            [&::-webkit-slider-thumb]:mt-[-5px]
-            [&::-webkit-slider-thumb]:h-4
-            [&::-webkit-slider-thumb]:w-4
-            [&::-webkit-slider-thumb]:appearance-none
-            [&::-webkit-slider-thumb]:rounded-full
-            [&::-webkit-slider-thumb]:border-2
-            [&::-webkit-slider-thumb]:border-blue-600
-            [&::-webkit-slider-thumb]:bg-white"
-        />
-
-        <input
-          type="range"
-          min={0}
-          max={MAX_RANGE}
-          step={100_000}
-          value={maxBudget}
-          onChange={(event) =>
-            update(
-              minBudget,
-              Math.max(Number(event.target.value), minBudget),
-            )
-          }
-          className="pointer-events-none absolute inset-0 h-7 w-full appearance-none bg-transparent
-            [&::-webkit-slider-runnable-track]:h-1.5
-            [&::-webkit-slider-runnable-track]:bg-transparent
-            [&::-webkit-slider-thumb]:pointer-events-auto
-            [&::-webkit-slider-thumb]:mt-[-5px]
-            [&::-webkit-slider-thumb]:h-4
-            [&::-webkit-slider-thumb]:w-4
-            [&::-webkit-slider-thumb]:appearance-none
-            [&::-webkit-slider-thumb]:rounded-full
-            [&::-webkit-slider-thumb]:border-2
-            [&::-webkit-slider-thumb]:border-blue-600
-            [&::-webkit-slider-thumb]:bg-white"
-        />
-      </div>
-    </div>
-  );
-}
 
 function generateMockRequirement(
   input: string,
