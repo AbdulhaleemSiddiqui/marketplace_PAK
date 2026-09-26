@@ -60,7 +60,6 @@ import {
 import type { User } from "../types/auth";
 
 import type {
-  RequirementField,
   SavedBuyerRequirement,
   StructuredRequirement,
 } from "../types/marketplace";
