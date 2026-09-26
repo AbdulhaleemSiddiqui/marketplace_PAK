@@ -82,6 +82,8 @@ export default function AiRequirementComposer({
   onFieldChange,
   onSubmit,
   submitting,
+  generating,
+  generationError,
   onClose,
 }: {
   input: string;
@@ -101,6 +103,8 @@ export default function AiRequirementComposer({
   ) => void;
   onSubmit: () => void;
   submitting: boolean;
+  generating: boolean;
+  generationError?: string;
   onClose: () => void;
 }) {
   const fileRef =
@@ -473,10 +477,10 @@ export default function AiRequirementComposer({
                 onGenerate
               }
               disabled={
-                !input.trim()
+                !input.trim() || generating
               }
               className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white ${
-                input.trim()
+                input.trim() && !generating
                   ? "bg-blue-600 hover:bg-blue-700"
                   : "cursor-not-allowed bg-slate-300"
               }`}
@@ -485,10 +489,16 @@ export default function AiRequirementComposer({
                 size={15}
               />
 
-              Generate
+              {generating ? "Generating..." : "Generate"}
             </button>
           </div>
         </div>
+
+        {generationError && (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+            {generationError}
+          </div>
+        )}
 
         {requirement && (
           <div className="mt-6 rounded-2xl border border-slate-200 p-5">
@@ -691,7 +701,7 @@ export default function AiRequirementComposer({
                 </label>
 
                 <span className="text-xs text-slate-400">
-                  {images.length}/5
+                  {images.length}/20
                 </span>
               </div>
 
@@ -717,7 +727,7 @@ export default function AiRequirementComposer({
                   </p>
 
                   <p className="mt-1 text-xs text-slate-400">
-                    Maximum 5 images — JPG, PNG, WEBP
+                    Maximum 20 images — JPG, PNG, WEBP
                   </p>
                 </div>
               </button>
