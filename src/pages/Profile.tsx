@@ -72,7 +72,14 @@ import {
   startDealCompletion,
   getRequirementDeal,
   confirmSellerDealCompletion,
+  cancelMarketplaceDeal,
+  type MarketplaceDeal,
 } from "../services/dealApiService";
+
+import {
+  createMarketplaceReview,
+  getDealReviews,
+} from "../services/reviewApiService";
 
 export default function Profile() {
   const navigate =
@@ -114,7 +121,9 @@ export default function Profile() {
 
 
   const [sellerHistoryTab, setSellerHistoryTab] =
-    useState<"inquiries" | "credits">("inquiries");
+    useState<"active" | "completed" | "cancelled" | "inquiries" | "credits">("active");
+  const [dealByRequirement, setDealByRequirement] = useState<Record<string, MarketplaceDeal | null>>({});
+  const [reviewedDealIds, setReviewedDealIds] = useState<Set<string>>(new Set());
   const [sellerHistoryPage, setSellerHistoryPage] = useState(1);
   const SELLER_HISTORY_PAGE_SIZE = 5;
 
@@ -318,6 +327,32 @@ const [
       cancelled = true;
     };
   }, [user?.id, user?.role, refreshKey]);
+
+  useEffect(() => {
+    const relevant = isSeller ? sellerInquiries : buyerInquiries;
+    const ids = Array.from(new Set(relevant.filter(x => x.status === "accepted" || x.status === "completed").map(x => x.requirementId)));
+    if (ids.length === 0) return;
+
+    let cancelled = false;
+    void Promise.all(ids.map(async id => {
+      try { return [id, await getRequirementDeal(id)] as const; }
+      catch { return [id, null] as const; }
+    })).then(async entries => {
+      if (cancelled) return;
+      const map = Object.fromEntries(entries);
+      setDealByRequirement(prev => ({ ...prev, ...map }));
+      const completedDeals = entries.map(x => x[1]).filter((x): x is MarketplaceDeal => !!x && x.status === "completed");
+      const reviewChecks = await Promise.all(completedDeals.map(async deal => {
+        try {
+          const reviews = await getDealReviews(deal.id);
+          return reviews.some(review => review.reviewerUserId === user?.id) ? deal.id : null;
+        } catch { return null; }
+      }));
+      if (!cancelled) setReviewedDealIds(new Set(reviewChecks.filter((x): x is string => !!x)));
+    });
+
+    return () => { cancelled = true; };
+  }, [user?.id, isSeller, sellerInquiries, buyerInquiries, refreshKey]);
 
   // =====================================================
   // SUCCESS
@@ -573,6 +608,40 @@ for (const imageId of deletedImageIds) {
       setRefreshKey((value) => value + 1);
     } catch (error) {
       alert(error instanceof Error ? error.message : "Unable to confirm deal completion.");
+    }
+  };
+
+  const handleCancelDeal = async (inquiry: SellerInquiry) => {
+    const deal = dealByRequirement[inquiry.requirementId];
+    if (!deal || deal.status === "completed" || deal.status === "cancelled") return;
+    const reason = window.prompt("Deal cancel karne ki reason likhein:");
+    if (!reason?.trim()) return;
+    try {
+      await cancelMarketplaceDeal(deal.id, reason);
+      setSuccessMessage("Deal cancelled. Reason saved successfully.");
+      setRefreshKey(value => value + 1);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to cancel deal.");
+    }
+  };
+
+  const handleReviewDeal = async (inquiry: SellerInquiry) => {
+    const deal = dealByRequirement[inquiry.requirementId];
+    if (!deal || deal.status !== "completed" || reviewedDealIds.has(deal.id)) return;
+    const rawRating = window.prompt(isSeller ? "Buyer rating (1-5):" : "Seller rating (1-5):");
+    if (!rawRating) return;
+    const rating = Number(rawRating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      alert("Rating 1 se 5 tak honi chahiye.");
+      return;
+    }
+    const comment = window.prompt("Review comment (optional):") ?? "";
+    try {
+      await createMarketplaceReview(deal.id, rating, comment);
+      setSuccessMessage("Review submitted successfully.");
+      setReviewedDealIds(prev => new Set(prev).add(deal.id));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to submit review.");
     }
   };
 
@@ -902,7 +971,11 @@ for (const imageId of deletedImageIds) {
                       onReject={() =>
                         void handleInquiryAction(inquiry.id, "rejected")
                       }
+                      deal={dealByRequirement[inquiry.requirementId]}
+                      reviewed={!!dealByRequirement[inquiry.requirementId] && reviewedDealIds.has(dealByRequirement[inquiry.requirementId]!.id)}
                       onComplete={() => void handleCompleteDeal(inquiry)}
+                      onCancel={() => void handleCancelDeal(inquiry)}
+                      onReview={() => void handleReviewDeal(inquiry)}
                     />
                   ))}
                 </>
@@ -1051,7 +1124,15 @@ for (const imageId of deletedImageIds) {
                         sellerHistoryPage * SELLER_HISTORY_PAGE_SIZE,
                       )
                       .map((inquiry) => (
-                        <SellerInquiryCard key={inquiry.id} inquiry={inquiry} onComplete={() => void handleSellerCompleteDeal(inquiry)} />
+                        <SellerInquiryCard
+                          key={inquiry.id}
+                          inquiry={inquiry}
+                          deal={dealByRequirement[inquiry.requirementId]}
+                          reviewed={!!dealByRequirement[inquiry.requirementId] && reviewedDealIds.has(dealByRequirement[inquiry.requirementId]!.id)}
+                          onComplete={() => void handleSellerCompleteDeal(inquiry)}
+                          onCancel={() => void handleCancelDeal(inquiry)}
+                          onReview={() => void handleReviewDeal(inquiry)}
+                        />
                       ))}
                     <SimpleHistoryPagination
                       page={sellerHistoryPage}
