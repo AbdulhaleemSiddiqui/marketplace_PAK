@@ -107,6 +107,12 @@ export default function Profile() {
   const [sellerDataError, setSellerDataError] = useState("");
 
 
+  const [sellerHistoryTab, setSellerHistoryTab] =
+    useState<"inquiries" | "credits">("inquiries");
+  const [sellerHistoryPage, setSellerHistoryPage] = useState(1);
+  const SELLER_HISTORY_PAGE_SIZE = 5;
+
+
   const [
     editingRequirement,
     setEditingRequirement,
@@ -969,107 +975,116 @@ for (const imageId of deletedImageIds) {
             </div>
 
             <div className="mt-8">
-              <Link
-                to="/find"
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 font-semibold text-white hover:bg-blue-600"
-              >
-                <ShoppingBag
-                  size={17}
-                />
-
-                Find Buyer Requirements
-              </Link>
+              <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSellerHistoryTab("inquiries");
+                    setSellerHistoryPage(1);
+                  }}
+                  className={`rounded-lg px-4 py-2 text-sm font-bold transition ${
+                    sellerHistoryTab === "inquiries"
+                      ? "bg-slate-950 text-white"
+                      : "text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  My Sent Inquiries
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSellerHistoryTab("credits");
+                    setSellerHistoryPage(1);
+                  }}
+                  className={`rounded-lg px-4 py-2 text-sm font-bold transition ${
+                    sellerHistoryTab === "credits"
+                      ? "bg-slate-950 text-white"
+                      : "text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  Credit Transactions
+                </button>
+              </div>
             </div>
 
-            <HistoryCard
-              title="My Sent Inquiries"
-              subtitle="Buyer requirements par bheji hui inquiries"
-            >
-              {sellerInquiries.length ===
-              0 ? (
-                <EmptyHistory
-                  text="Abhi koi inquiry send nahi ki."
-                />
-              ) : (
-                sellerInquiries.map(
-                  (inquiry) => (
-                    <SellerInquiryCard
-                      key={
-                        inquiry.id
-                      }
-                      inquiry={
-                        inquiry
-                      }
+            {sellerHistoryTab === "inquiries" ? (
+              <HistoryCard
+                title="My Sent Inquiries"
+                subtitle="Buyer requirements par bheji hui inquiries"
+              >
+                {sellerInquiries.length === 0 ? (
+                  <EmptyHistory text="Abhi koi inquiry send nahi ki." />
+                ) : (
+                  <>
+                    {sellerInquiries
+                      .slice(
+                        (sellerHistoryPage - 1) * SELLER_HISTORY_PAGE_SIZE,
+                        sellerHistoryPage * SELLER_HISTORY_PAGE_SIZE,
+                      )
+                      .map((inquiry) => (
+                        <SellerInquiryCard key={inquiry.id} inquiry={inquiry} />
+                      ))}
+                    <SimpleHistoryPagination
+                      page={sellerHistoryPage}
+                      totalItems={sellerInquiries.length}
+                      pageSize={SELLER_HISTORY_PAGE_SIZE}
+                      onPageChange={setSellerHistoryPage}
                     />
-                  )
-                )
-              )}
-            </HistoryCard>
-
-            <HistoryCard
-              title="Credit Transactions"
-              subtitle="Seller wallet ki transaction history"
-            >
-              {creditTransactions.length ===
-              0 ? (
-                <EmptyHistory
-                  text="Abhi koi credit transaction nahi hai."
-                />
-              ) : (
-                creditTransactions.map(
-                  (transaction) => (
-                    <div
-                      key={
-                        transaction.id
-                      }
-                      className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 p-5 sm:flex-row sm:items-center"
-                    >
-                      <div>
-                        <p className="font-bold">
-                          {
-                            transaction.description
-                          }
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-400">
-                          {new Date(
-                            transaction.createdAt
-                          ).toLocaleString()}
-                        </p>
-                      </div>
-
-                      <div className="sm:text-right">
-                        <p
-                          className={`font-black ${
-                            transaction.amount >
-                            0
-                              ? "text-emerald-600"
-                              : "text-red-500"
-                          }`}
+                  </>
+                )}
+              </HistoryCard>
+            ) : (
+              <HistoryCard
+                title="Credit Transactions"
+                subtitle="Seller wallet ki transaction history"
+              >
+                {creditTransactions.length === 0 ? (
+                  <EmptyHistory text="Abhi koi credit transaction nahi hai." />
+                ) : (
+                  <>
+                    {creditTransactions
+                      .slice(
+                        (sellerHistoryPage - 1) * SELLER_HISTORY_PAGE_SIZE,
+                        sellerHistoryPage * SELLER_HISTORY_PAGE_SIZE,
+                      )
+                      .map((transaction) => (
+                        <div
+                          key={transaction.id}
+                          className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 p-5 sm:flex-row sm:items-center"
                         >
-                          {transaction.amount >
-                          0
-                            ? "+"
-                            : ""}
-
-                          {
-                            transaction.amount
-                          }{" "}
-                          Credits
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-400">
-                          Balance:{" "}
-                          {
-                            transaction.balanceAfter
-                          }
-                        </p>
-                      </div>
-                    </div>
-                  )
-                )
-              )}
-            </HistoryCard>
+                          <div>
+                            <p className="font-bold">{transaction.description}</p>
+                            <p className="mt-1 text-xs text-slate-400">
+                              {new Date(transaction.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="sm:text-right">
+                            <p
+                              className={`font-black ${
+                                transaction.amount > 0
+                                  ? "text-emerald-600"
+                                  : "text-red-500"
+                              }`}
+                            >
+                              {transaction.amount > 0 ? "+" : ""}
+                              {transaction.amount} Credits
+                            </p>
+                            <p className="mt-1 text-xs text-slate-400">
+                              Balance: {transaction.balanceAfter}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    <SimpleHistoryPagination
+                      page={sellerHistoryPage}
+                      totalItems={creditTransactions.length}
+                      pageSize={SELLER_HISTORY_PAGE_SIZE}
+                      onPageChange={setSellerHistoryPage}
+                    />
+                  </>
+                )}
+              </HistoryCard>
+            )}
           </>
         )}
       </main>
@@ -1992,6 +2007,48 @@ function EmptyHistory({
   return (
     <div className="py-14 text-center text-sm text-slate-400">
       {text}
+    </div>
+  );
+}
+
+function SimpleHistoryPagination({
+  page,
+  totalItems,
+  pageSize,
+  onPageChange,
+}: {
+  page: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+      <p className="text-xs font-semibold text-slate-400">
+        Page {page} of {totalPages}
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }
