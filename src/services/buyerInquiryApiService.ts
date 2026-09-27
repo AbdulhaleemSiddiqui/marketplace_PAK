@@ -9,19 +9,19 @@ export function getBuyerInquiriesForRequirement(requirementId: string) {
 }
 
 export function markBuyerInquiryViewed(inquiryId: string) {
-  return apiRequest<void>(`/api/inquiries/${inquiryId}/viewed`, {
+  return apiRequest<SellerInquiry>(`/api/inquiries/${inquiryId}/viewed`, {
     method: "PATCH",
   });
 }
 
 export function acceptBuyerInquiry(inquiryId: string) {
-  return apiRequest<void>(`/api/inquiries/${inquiryId}/accept`, {
+  return apiRequest<SellerInquiry>(`/api/inquiries/${inquiryId}/accept`, {
     method: "PATCH",
   });
 }
 
 export function rejectBuyerInquiry(inquiryId: string) {
-  return apiRequest<void>(`/api/inquiries/${inquiryId}/reject`, {
+  return apiRequest<SellerInquiry>(`/api/inquiries/${inquiryId}/reject`, {
     method: "PATCH",
   });
 }
