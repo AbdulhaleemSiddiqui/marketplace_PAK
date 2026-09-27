@@ -136,7 +136,9 @@ export interface SellerInquiry {
   status: InquiryStatus;
 
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
+  viewedAt?: string | null;
+  respondedAt?: string | null;
 }
 
 export type CreditTransactionType =

@@ -39,6 +39,7 @@ import {
 
 import {
   getSellerWallet,
+  getSellerInquiriesApi,
 } from "../services/sellerProfileApiService";
 
 import {
@@ -266,6 +267,8 @@ export default function Find() {
     );
 
   const [sellerBalance, setSellerBalance] = useState(0);
+  const [sentInquiryRequirementIds, setSentInquiryRequirementIds] =
+    useState<Set<string>>(() => new Set());
   const INQUIRY_COST = 10;
 
   const refreshSellerWallet = useCallback(async () => {
@@ -292,6 +295,42 @@ export default function Find() {
       setSellerBalance(0);
     }
   }, [currentUser?.id, currentUser?.role, refreshSellerWallet]);
+
+  useEffect(() => {
+    if (currentUser?.role !== "seller") {
+      sentInquiryIds.current.clear();
+      setSentInquiryRequirementIds(new Set());
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSentInquiries = async () => {
+      try {
+        const inquiries = await getSellerInquiriesApi();
+        if (cancelled) return;
+
+        const requirementIds = new Set(
+          inquiries.map((inquiry) => inquiry.requirementId),
+        );
+
+        sentInquiryIds.current = new Set(
+          inquiries.map(
+            (inquiry) => currentUser.id + ":" + inquiry.requirementId,
+          ),
+        );
+        setSentInquiryRequirementIds(requirementIds);
+      } catch (error) {
+        console.error("Unable to load seller inquiries.", error);
+      }
+    };
+
+    void loadSentInquiries();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, currentUser?.role]);
 
   const [
     search,
@@ -1181,6 +1220,11 @@ export default function Find() {
       await sendSellerInquiry({ requirementId: requirement.id, ...offer });
       await refreshSellerWallet();
       sentInquiryIds.current.add(inquiryKey);
+      setSentInquiryRequirementIds((previous) => {
+        const next = new Set(previous);
+        next.add(requirement.id);
+        return next;
+      });
       setInquiryRequirement(null);
       setRefreshKey(value => value + 1);
       setSuccessMessage("Inquiry submitted successfully.");
@@ -1652,6 +1696,7 @@ export default function Find() {
             totalPages={totalPages}
             pageSize={PAGE_SIZE}
             currentUserRole={currentUser?.role}
+            sentInquiryRequirementIds={sentInquiryRequirementIds}
             onViewRequirement={handleViewRequirement}
             onSendInquiry={handleSendInquiry}
             onPageChange={setCurrentPage}

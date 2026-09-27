@@ -27,11 +27,13 @@ function StatusBadge({ active }: { active: boolean }) {
 export default function RequirementCard({
   requirement,
   currentUserRole,
+  inquiryAlreadySent = false,
   onView,
   onInquiry,
 }: {
   requirement: PublicRequirement;
   currentUserRole?: "buyer" | "seller";
+  inquiryAlreadySent?: boolean;
   onView: () => void;
   onInquiry: () => void;
 }) {
@@ -42,7 +44,7 @@ export default function RequirementCard({
     currentUserRole === "buyer";
 
   const canSendInquiry =
-    active && !buyerLoggedIn;
+    active && !buyerLoggedIn && !inquiryAlreadySent;
 
   const inquiryLabel =
     requirement.queryCount === 1
@@ -281,6 +283,15 @@ export default function RequirementCard({
             className="cursor-not-allowed rounded-xl bg-slate-200 px-5 py-2.5 text-sm font-bold text-slate-500"
           >
             Requirement Closed
+          </button>
+        ) : inquiryAlreadySent ? (
+          <button
+            type="button"
+            disabled
+            title="You already sent an inquiry for this requirement."
+            className="cursor-not-allowed rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-2.5 text-sm font-bold text-emerald-700"
+          >
+            Inquiry Sent
           </button>
         ) : (
           <button
