@@ -121,9 +121,10 @@ export default function Profile() {
 
 
   const [sellerHistoryTab, setSellerHistoryTab] =
-    useState<"active" | "completed" | "cancelled" | "inquiries" | "credits">("active");
+    useState<"active" | "closed" | "other" | "credits">("active");
   const [dealByRequirement, setDealByRequirement] = useState<Record<string, MarketplaceDeal | null>>({});
   const [reviewedDealIds, setReviewedDealIds] = useState<Set<string>>(new Set());
+  const [buyerRequirementsTab, setBuyerRequirementsTab] = useState<"current" | "history">("current");
   const [sellerHistoryPage, setSellerHistoryPage] = useState(1);
   const SELLER_HISTORY_PAGE_SIZE = 5;
 
@@ -428,6 +429,17 @@ const [
   // SELLER
   // =====================================================
 
+  const currentRequirements = requirements.filter(item => item.status !== "completed");
+  const completedRequirements = requirements.filter(item => item.status === "completed");
+  const visibleRequirements = buyerRequirementsTab === "history" ? completedRequirements : currentRequirements;
+  const sellerClosedInquiries = sellerInquiries.filter(inquiry => {
+    const deal = dealByRequirement[inquiry.requirementId];
+    return deal?.status === "completed" || deal?.status === "cancelled" || inquiry.status === "completed";
+  });
+  const sellerOtherInquiries = sellerInquiries.filter(inquiry => !sellerClosedInquiries.includes(inquiry) && inquiry.status === "rejected");
+  const sellerActiveInquiries = sellerInquiries.filter(inquiry => !sellerClosedInquiries.includes(inquiry) && !sellerOtherInquiries.includes(inquiry));
+  const visibleSellerInquiries = sellerHistoryTab === "closed" ? sellerClosedInquiries : sellerHistoryTab === "other" ? sellerOtherInquiries : sellerActiveInquiries;
+
   const creditBalance =
     isSeller
       ? sellerCreditBalance
@@ -536,6 +548,7 @@ for (const imageId of deletedImageIds) {
   const handleEditRequirement = async (
     requirement: RequirementListItem,
   ) => {
+    if (requirement.status === "completed") return;
     try {
       const details =
         await getRequirementDetails(
@@ -889,10 +902,18 @@ for (const imageId of deletedImageIds) {
 </div>
 
             {/* REQUIREMENTS */}
+            <div className="mt-8 flex flex-wrap gap-2" role="tablist" aria-label="My requirements">
+              {(["current", "history"] as const).map(tab => (
+                <button key={tab} type="button" role="tab" aria-selected={buyerRequirementsTab === tab}
+                  onClick={() => setBuyerRequirementsTab(tab)}
+                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${buyerRequirementsTab === tab ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+                >{tab === "current" ? `Current (${currentRequirements.length})` : `History (${completedRequirements.length})`}</button>
+              ))}
+            </div>
 
             <HistoryCard
-              title="My Requirements"
-              subtitle="Aapki buyer requirement history"
+              title={buyerRequirementsTab === "history" ? "Completed Requirements" : "My Requirements"}
+              subtitle={buyerRequirementsTab === "history" ? "Completed marketplace requirements" : "Current marketplace requirements"}
             >
               {requirementsLoading ? (
                 <div className="py-14 text-center text-sm text-slate-400">
@@ -902,26 +923,18 @@ for (const imageId of deletedImageIds) {
                 <div className="py-14 text-center text-sm font-semibold text-red-500">
                   {requirementsError}
                 </div>
-              ) : requirements.length === 0 ? (
-                <EmptyHistory
-                  text="Abhi koi buyer requirement nahi hai."
-                />
+              ) : visibleRequirements.length === 0 ? (
+                <EmptyHistory text={buyerRequirementsTab === "history" ? "Abhi koi completed requirement nahi hai." : "Abhi koi current requirement nahi hai."} />
               ) : (
-                requirements.map((item) => (
+                visibleRequirements.map((item) => (
                   <RequirementRow
                     key={item.id}
                     item={item}
                     inquiryCount={
                       item.inquiryCount ?? 0
                     }
-                    onEdit={() =>
-                      void handleEditRequirement(item)
-                    }
-                    onToggleActivity={() =>
-                      void handleToggleRequirementActivity(
-                        item,
-                      )
-                    }
+                    onEdit={item.status === "completed" ? undefined : () => void handleEditRequirement(item)}
+                    onToggleActivity={item.status === "completed" ? undefined : () => void handleToggleRequirementActivity(item)}
                   />
                 ))
               )}
@@ -1076,49 +1089,30 @@ for (const imageId of deletedImageIds) {
               />
             </div>
 
-            <div className="mt-8">
-              <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSellerHistoryTab("inquiries");
-                    setSellerHistoryPage(1);
-                  }}
-                  className={`rounded-lg px-4 py-2 text-sm font-bold transition ${
-                    sellerHistoryTab === "inquiries"
-                      ? "bg-slate-950 text-white"
-                      : "text-slate-500 hover:bg-slate-50"
-                  }`}
-                >
-                  My Sent Inquiries
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSellerHistoryTab("credits");
-                    setSellerHistoryPage(1);
-                  }}
-                  className={`rounded-lg px-4 py-2 text-sm font-bold transition ${
-                    sellerHistoryTab === "credits"
-                      ? "bg-slate-950 text-white"
-                      : "text-slate-500 hover:bg-slate-50"
-                  }`}
-                >
-                  Credit Transactions
-                </button>
-              </div>
+            <div className="mt-8 flex flex-wrap gap-2" role="tablist" aria-label="Seller activity">
+              {([
+                ["active", "Active", sellerActiveInquiries.length],
+                ["closed", "Closed Deals", sellerClosedInquiries.length],
+                ["other", "Other Inquiries", sellerOtherInquiries.length],
+                ["credits", "Credit Transactions", creditTransactions.length],
+              ] as const).map(([tab, label, count]) => (
+                <button key={tab} type="button" role="tab" aria-selected={sellerHistoryTab === tab}
+                  onClick={() => { setSellerHistoryTab(tab); setSellerHistoryPage(1); }}
+                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${sellerHistoryTab === tab ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+                >{label} ({count})</button>
+              ))}
             </div>
 
-            {sellerHistoryTab === "inquiries" ? (
+            {sellerHistoryTab !== "credits" ? (
               <HistoryCard
-                title="My Sent Inquiries"
-                subtitle="Buyer requirements par bheji hui inquiries"
+                title={sellerHistoryTab === "closed" ? "Closed Deals" : sellerHistoryTab === "other" ? "Other Inquiries" : "Active Inquiries"}
+                subtitle={sellerHistoryTab === "closed" ? "Completed aur cancelled deals" : sellerHistoryTab === "other" ? "Rejected inquiries" : "Buyer requirements par active inquiries"}
               >
-                {sellerInquiries.length === 0 ? (
-                  <EmptyHistory text="Abhi koi inquiry send nahi ki." />
+                {visibleSellerInquiries.length === 0 ? (
+                  <EmptyHistory text="Is tab mein abhi koi inquiry nahi hai." />
                 ) : (
                   <>
-                    {sellerInquiries
+                    {visibleSellerInquiries
                       .slice(
                         (sellerHistoryPage - 1) * SELLER_HISTORY_PAGE_SIZE,
                         sellerHistoryPage * SELLER_HISTORY_PAGE_SIZE,
@@ -1136,7 +1130,7 @@ for (const imageId of deletedImageIds) {
                       ))}
                     <SimpleHistoryPagination
                       page={sellerHistoryPage}
-                      totalItems={sellerInquiries.length}
+                      totalItems={visibleSellerInquiries.length}
                       pageSize={SELLER_HISTORY_PAGE_SIZE}
                       onPageChange={setSellerHistoryPage}
                     />
