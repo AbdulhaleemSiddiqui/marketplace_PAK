@@ -1913,6 +1913,10 @@ function BuyerInquiryCard({
   onAccept,
   onReject,
   onComplete,
+  deal,
+  reviewed,
+  onCancel,
+  onReview,
 }: {
   inquiry:
     SellerInquiry;
@@ -1924,6 +1928,10 @@ function BuyerInquiryCard({
   onReject: () => void;
 
   onComplete: () => void;
+  deal?: MarketplaceDeal | null;
+  reviewed: boolean;
+  onCancel: () => void;
+  onReview: () => void;
 }) {
   useEffect(() => {
     if (inquiry.status !== "sent") return;
@@ -1983,13 +1991,27 @@ function BuyerInquiryCard({
         </div>
 
         {inquiry.status === "accepted" && (
-          <button
-            type="button"
-            onClick={onComplete}
-            className="h-fit rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
-          >
-            Complete Deal
-          </button>
+          <div className="flex h-fit flex-wrap gap-2">
+            {!deal && (
+              <button type="button" onClick={onComplete} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">
+                Complete Deal
+              </button>
+            )}
+            {deal?.status === "pending_confirmation" && (
+              <>
+                <span className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700">Waiting for Seller</span>
+                <button type="button" onClick={onCancel} className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600">Cancel Deal</button>
+              </>
+            )}
+            {deal?.status === "completed" && (
+              reviewed
+                ? <span className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700">Review Submitted</span>
+                : <button type="button" onClick={onReview} className="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white">Rate Seller</button>
+            )}
+            {deal?.status === "cancelled" && (
+              <span className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-600">Deal Cancelled</span>
+            )}
+          </div>
         )}
 
                 {(inquiry.status === "sent" ||
@@ -2026,9 +2048,17 @@ function BuyerInquiryCard({
 function SellerInquiryCard({
   inquiry,
   onComplete,
+  deal,
+  reviewed,
+  onCancel,
+  onReview,
 }: {
   inquiry: SellerInquiry;
   onComplete: () => void;
+  deal?: MarketplaceDeal | null;
+  reviewed: boolean;
+  onCancel: () => void;
+  onReview: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 p-5">
@@ -2059,14 +2089,19 @@ function SellerInquiryCard({
           <span className="h-fit rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold capitalize">
             {inquiry.status}
           </span>
-          {inquiry.status === "accepted" && (
-            <button
-              type="button"
-              onClick={onComplete}
-              className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white"
-            >
-              Confirm Completion
-            </button>
+          {inquiry.status === "accepted" && deal?.status === "pending_confirmation" && (
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={onComplete} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white">Confirm Completion</button>
+              <button type="button" onClick={onCancel} className="rounded-xl border border-red-200 px-4 py-2.5 text-xs font-bold text-red-600">Cancel Deal</button>
+            </div>
+          )}
+          {deal?.status === "completed" && (
+            reviewed
+              ? <span className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">Review Submitted</span>
+              : <button type="button" onClick={onReview} className="rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-white">Rate Buyer</button>
+          )}
+          {deal?.status === "cancelled" && (
+            <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600">Cancelled</span>
           )}
         </div>
       </div>
