@@ -20,3 +20,19 @@ export function createMarketplaceReview(dealId: string, rating: number, comment?
 export function getUserRating(userId: string) {
   return apiRequest<UserRating>(`/api/users/${userId}/rating`);
 }
+
+export interface MarketplaceReview {
+  id: string;
+  dealId: string;
+  reviewerUserId: string;
+  reviewerName: string;
+  revieweeUserId: string;
+  revieweeName: string;
+  rating: number;
+  comment?: string | null;
+  createdAt: string;
+}
+
+export function getDealReviews(dealId: string) {
+  return apiRequest<MarketplaceReview[]>(`/api/deals/${dealId}/reviews`);
+}
