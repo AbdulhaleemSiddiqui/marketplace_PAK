@@ -2,10 +2,12 @@ import {
     Coins,
     MessageCircle,
     ShieldCheck,
+    WalletCards,
     X,
   } from "lucide-react";
   
   import {
+    useEffect,
     useState,
   } from "react";
   
@@ -59,9 +61,24 @@ import {
       return null;
     }
   
+    useEffect(() => {
+      if (!open) {
+        setMessage("");
+        setOfferedPrice("");
+      }
+    }, [open]);
+
     const enoughCredits =
       currentBalance >=
       inquiryCost;
+
+    const numericOfferedPrice =
+      offeredPrice.replace(/[^0-9]/g, "");
+
+    const formattedOfferedPrice =
+      numericOfferedPrice
+        ? Number(numericOfferedPrice).toLocaleString("en-PK")
+        : "";
   
     const handleSubmit = () => {
       if (submitting) return;
@@ -89,15 +106,17 @@ import {
           items-center
           justify-center
           bg-slate-950/60
-          p-4
+          p-3
+          sm:p-4
           backdrop-blur-sm
         "
       >
         <div
           className="
             w-full
-            max-w-lg
-            overflow-hidden
+            max-w-xl
+            max-h-[calc(100vh-1.5rem)]
+            overflow-y-auto
             rounded-3xl
             bg-white
             shadow-2xl
@@ -105,7 +124,7 @@ import {
         >
           {/* HEADER */}
   
-          <div className="flex items-start justify-between border-b border-slate-100 p-7">
+          <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-6 sm:py-5">
             <div>
               <div
                 className="
@@ -124,7 +143,7 @@ import {
                 />
               </div>
   
-              <h2 className="mt-5 text-2xl font-black">
+              <h2 className="mt-3 text-xl font-black sm:text-2xl">
                 Send Inquiry
               </h2>
   
@@ -146,8 +165,8 @@ import {
   
           {/* CONTENT */}
   
-          <div className="p-7">
-            <div className="rounded-2xl border border-slate-200 p-5">
+          <div className="px-5 py-4 sm:px-6 sm:py-5">
+            <div className="rounded-2xl border border-slate-200 p-4">
               <div className="flex items-center gap-2">
                 <ShieldCheck
                   size={16}
@@ -159,7 +178,7 @@ import {
                 </span>
               </div>
   
-              <h3 className="mt-3 font-black">
+              <h3 className="mt-2 font-black">
                 {
                   requirement.title
                 }
@@ -178,7 +197,7 @@ import {
   
             {/* WALLET */}
   
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-slate-50 p-4">
                 <p className="text-xs font-semibold uppercase text-slate-400">
                   Your Balance
@@ -217,26 +236,43 @@ import {
   
             {/* OFFER */}
   
-            <div className="mt-6">
-              <label className="mb-2 block text-sm font-bold">
-                Offered Price
-                <span className="ml-1 font-normal text-slate-400">
-                  optional
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="text-sm font-bold">
+                  Offered Price
+                  <span className="ml-1 font-normal text-slate-400">
+                    optional
+                  </span>
+                </label>
+                <span className="text-xs font-semibold text-slate-400">
+                  PKR
                 </span>
-              </label>
-  
-              <input
-                value={
-                  offeredPrice
-                }
-                onChange={(event) =>
-                  setOfferedPrice(
-                    event.target.value
-                  )
-                }
-                placeholder="e.g. PKR 140,000"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
-              />
+              </div>
+
+              <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-slate-50 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
+                <div className="flex items-center gap-2 border-r border-slate-200 bg-white px-4 text-sm font-black text-slate-700">
+                  <WalletCards size={16} className="text-blue-600" />
+                  PKR
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={formattedOfferedPrice}
+                  onChange={(event) =>
+                    setOfferedPrice(
+                      event.target.value.replace(/[^0-9]/g, "")
+                    )
+                  }
+                  placeholder="140,000"
+                  className="min-w-0 flex-1 bg-transparent px-4 py-3 text-base font-bold text-slate-950 outline-none"
+                />
+              </div>
+
+              {numericOfferedPrice && (
+                <p className="mt-1.5 text-xs font-semibold text-slate-400">
+                  Your offer: PKR {formattedOfferedPrice}
+                </p>
+              )}
             </div>
   
             {/* MESSAGE */}
@@ -253,13 +289,13 @@ import {
                     event.target.value
                   )
                 }
-                rows={5}
+                rows={4}
                 placeholder="Assalam-o-Alaikum, mere paas aapki requirement ke according laptop available hai..."
                 className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
               />
             </div>
   
-            <div className="mt-5 rounded-xl bg-blue-50 p-4 text-xs leading-5 text-blue-700">
+            <div className="mt-4 rounded-xl bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-700">
               Inquiry send hone par{" "}
               <strong>
                 {inquiryCost} credits
@@ -278,7 +314,7 @@ import {
                 handleSubmit
               }
               className="
-                mt-6
+                mt-4
                 flex
                 w-full
                 items-center
