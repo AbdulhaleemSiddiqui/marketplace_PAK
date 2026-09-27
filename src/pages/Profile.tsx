@@ -621,13 +621,6 @@ for (const imageId of deletedImageIds) {
           </Link>
 
           <div className="flex items-center gap-3">
-            <Link
-              to="/find"
-              className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold"
-            >
-              Find
-            </Link>
-
             <button
               type="button"
               onClick={
