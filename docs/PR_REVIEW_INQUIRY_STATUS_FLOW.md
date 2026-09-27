@@ -39,3 +39,13 @@ Date: 2026-09-27
 - Accept one inquiry and verify seller profile shows Accepted and accepted count changes.
 - Reject another inquiry and verify seller profile shows Rejected.
 - Refresh both profiles and confirm statuses persist.
+
+
+## Seller UX follow-up
+- Find loads the signed-in seller's inquiry history once and disables already-contacted requirement cards as `Inquiry Sent`.
+- Backend duplicate-inquiry protection remains the source-of-truth safety net.
+- Send Offer modal is compact/responsive and uses a formatted PKR offer field.
+- Seller Profile removes the redundant Find Buyer Requirements CTA.
+- Sent Inquiries and Credit Transactions are presented as two simple tabs.
+- Each seller history tab uses client-side pagination at 5 rows per page.
+- No fake Buy Credits/payment flow was introduced. Low balance directs the seller to support while admin credit management remains the current mechanism.
