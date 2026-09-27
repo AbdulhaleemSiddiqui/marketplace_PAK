@@ -1,6 +1,7 @@
 import {
   apiRequest,
   clearAccessToken,
+  getAccessToken,
   setAccessToken,
 } from "./apiClient";
 
@@ -274,6 +275,14 @@ export async function loginUserByPhone({
 export function getCurrentUser():
   User | null {
   try {
+    // Cached profile without an access token is not a valid session.
+    if (!getAccessToken()) {
+      localStorage.removeItem(
+        CURRENT_USER_KEY,
+      );
+      return null;
+    }
+
     const value =
       localStorage.getItem(
         CURRENT_USER_KEY,
@@ -283,6 +292,23 @@ export function getCurrentUser():
       ? JSON.parse(value)
       : null;
   } catch {
+    return null;
+  }
+}
+
+export async function restoreCurrentUser():
+  Promise<User | null> {
+  if (!getAccessToken()) {
+    localStorage.removeItem(
+      CURRENT_USER_KEY,
+    );
+    return null;
+  }
+
+  try {
+    return await refreshCurrentUser();
+  } catch {
+    logoutUser();
     return null;
   }
 }

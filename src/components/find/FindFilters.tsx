@@ -385,6 +385,56 @@ export default function FindFilters({
         title="Range"
       >
         <div className="rounded-xl bg-slate-50 p-3">
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            <label>
+              <span className="mb-1 block text-[10px] font-bold uppercase text-slate-400">
+                Min Price
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={maxPrice}
+                step={1000}
+                value={minPrice}
+                onChange={(event) => {
+                  const value = Math.max(
+                    0,
+                    Math.min(
+                      Number(event.target.value) || 0,
+                      maxPrice,
+                    ),
+                  );
+                  setMinPrice(value);
+                }}
+                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+              />
+            </label>
+
+            <label>
+              <span className="mb-1 block text-[10px] font-bold uppercase text-slate-400">
+                Max Price
+              </span>
+              <input
+                type="number"
+                min={minPrice}
+                max={MAX_RANGE}
+                step={1000}
+                value={maxPrice}
+                onChange={(event) => {
+                  const value = Math.min(
+                    MAX_RANGE,
+                    Math.max(
+                      Number(event.target.value) || 0,
+                      minPrice,
+                    ),
+                  );
+                  setMaxPrice(value);
+                }}
+                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+              />
+            </label>
+          </div>
+
           <div className="mb-4 flex items-center justify-between text-xs font-bold text-slate-700">
             <span>
               {formatRangeValue(

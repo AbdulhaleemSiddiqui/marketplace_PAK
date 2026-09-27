@@ -17,8 +17,7 @@ import {
   continueWithGoogleDemo,
   loginUser,
   loginUserByPhone,
-  registerUserWithEmail,
-  registerUserWithPhone,
+  registerUser,
 } from "../../services/authService";
 
 import type { User } from "../../types/auth";
@@ -67,6 +66,9 @@ export default function AuthModal({
       initialRole
     );
 
+  const [name, setName] =
+    useState("");
+
   const [email, setEmail] =
     useState("");
 
@@ -95,6 +97,7 @@ export default function AuthModal({
     setMode(initialMode);
     setMethod("options");
     setRole(initialRole);
+    setName("");
     setEmail("");
     setPhone("");
     setPassword("");
@@ -207,21 +210,24 @@ export default function AuthModal({
     setError("");
 
     if (
+      (mode === "register" && !name.trim()) ||
       !email.trim() ||
       !password.trim()
     ) {
       setError(
-        "Email aur password required hain."
+        mode === "register"
+          ? "Name, email aur password required hain."
+          : "Email aur password required hain."
       );
       return;
     }
 
     if (
       mode === "register" &&
-      password.length < 6
+      password.length < 8
     ) {
       setError(
-        "Password kam az kam 6 characters ka hona chahiye."
+        "Password kam az kam 8 characters ka hona chahiye."
       );
       return;
     }
@@ -236,9 +242,11 @@ export default function AuthModal({
               password,
               role,
             })
-          : await registerUserWithEmail({
+          : await registerUser({
               role,
+              name: name.trim(),
               email,
+              phone: "",
               password,
             });
 
@@ -262,21 +270,24 @@ export default function AuthModal({
     setError("");
 
     if (
+      (mode === "register" && !name.trim()) ||
       !phone.trim() ||
       !password.trim()
     ) {
       setError(
-        "Phone number aur password required hain."
+        mode === "register"
+          ? "Name, phone number aur password required hain."
+          : "Phone number aur password required hain."
       );
       return;
     }
 
     if (
       mode === "register" &&
-      password.length < 6
+      password.length < 8
     ) {
       setError(
-        "Password kam az kam 6 characters ka hona chahiye."
+        "Password kam az kam 8 characters ka hona chahiye."
       );
       return;
     }
@@ -291,9 +302,15 @@ export default function AuthModal({
               password,
               role,
             })
-          : await registerUserWithPhone({
+          : await registerUser({
               role,
-              phone,
+              name: name.trim(),
+              email:
+                `phone-${phone.replace(/\D/g, "")}@khojmarket.local`,
+              phone:
+                phone.trim().startsWith("+")
+                  ? phone.trim()
+                  : `+92${phone.replace(/\D/g, "").replace(/^0/, "")}`,
               password,
             });
 
@@ -317,6 +334,7 @@ export default function AuthModal({
     );
 
     setMethod("options");
+    setName("");
     setEmail("");
     setPhone("");
     setPassword("");
@@ -503,6 +521,15 @@ export default function AuthModal({
               }
               className="mt-7"
             >
+              {mode === "register" && (
+                <FormField
+                  label="Full name"
+                  value={name}
+                  placeholder="Enter your name"
+                  onChange={setName}
+                />
+              )}
+
               <FormField
                 label="Email address"
                 type="email"
@@ -567,6 +594,15 @@ export default function AuthModal({
               }
               className="mt-7"
             >
+              {mode === "register" && (
+                <FormField
+                  label="Full name"
+                  value={name}
+                  placeholder="Enter your name"
+                  onChange={setName}
+                />
+              )}
+
               <FormField
                 label="Phone number"
                 value={phone}

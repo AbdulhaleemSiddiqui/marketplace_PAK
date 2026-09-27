@@ -24,6 +24,7 @@ import {
 } from "./services/adminSession";
 
 import { adminApiRequest } from "./services/adminApiClient";
+import { restoreCurrentUser } from "./services/authService";
 
 function useValidatedAdminSession() {
   const [checking, setChecking] = useState(true);
@@ -97,6 +98,36 @@ function AdminLoginRoute() {
 }
 
 export default function App() {
+  const [checkingUserSession, setCheckingUserSession] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const validateUserSession = async () => {
+      await restoreCurrentUser();
+
+      if (!cancelled) {
+        setCheckingUserSession(false);
+      }
+    };
+
+    void validateUserSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (checkingUserSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5 text-sm font-semibold text-slate-600 shadow-sm">
+          Checking session...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <Routes>
