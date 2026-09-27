@@ -224,10 +224,10 @@ export default function AuthModal({
 
     if (
       mode === "register" &&
-      password.length < 6
+      password.length < 8
     ) {
       setError(
-        "Password kam az kam 6 characters ka hona chahiye."
+        "Password kam az kam 8 characters ka hona chahiye."
       );
       return;
     }
@@ -284,10 +284,10 @@ export default function AuthModal({
 
     if (
       mode === "register" &&
-      password.length < 6
+      password.length < 8
     ) {
       setError(
-        "Password kam az kam 6 characters ka hona chahiye."
+        "Password kam az kam 8 characters ka hona chahiye."
       );
       return;
     }
