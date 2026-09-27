@@ -39,6 +39,7 @@ import {
 
 import {
   getBuyerInquiriesForRequirement,
+  markBuyerInquiryViewed,
   acceptBuyerInquiry,
   rejectBuyerInquiry,
 } from "../services/buyerInquiryApiService";
@@ -853,6 +854,14 @@ for (const imageId of deletedImageIds) {
                     <BuyerInquiryCard
                       key={inquiry.id}
                       inquiry={inquiry}
+                      onViewed={async () => {
+                        const updated = await markBuyerInquiryViewed(inquiry.id);
+                        setBuyerInquiries((items) =>
+                          items.map((item) =>
+                            item.id === updated.id ? updated : item,
+                          ),
+                        );
+                      }}
                       onAccept={() =>
                         void handleInquiryAction(inquiry.id, "accepted")
                       }
@@ -1635,6 +1644,12 @@ function RequirementRow({
     item.activityStatus !==
     "inactive";
 
+  useEffect(() => {
+    if (inquiry.status === "sent") {
+      void onViewed();
+    }
+  }, [inquiry.id, inquiry.status, onViewed]);
+
   return (
     <div className="rounded-2xl border border-slate-200 p-5">
       <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
@@ -1775,11 +1790,14 @@ function RequirementRow({
 
 function BuyerInquiryCard({
   inquiry,
+  onViewed,
   onAccept,
   onReject,
 }: {
   inquiry:
     SellerInquiry;
+
+  onViewed: () => Promise<void>;
 
   onAccept: () => void;
 
@@ -1834,8 +1852,8 @@ function BuyerInquiryCard({
           )}
         </div>
 
-        {inquiry.status ===
-          "sent" && (
+        {(inquiry.status === "sent" ||
+          inquiry.status === "viewed") && (
           <div className="flex gap-2">
             <button
               onClick={
