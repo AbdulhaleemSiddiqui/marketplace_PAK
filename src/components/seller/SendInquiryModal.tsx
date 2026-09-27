@@ -144,12 +144,11 @@ import {
               </div>
   
               <h2 className="mt-3 text-xl font-black sm:text-2xl">
-                Send Inquiry
+                Send Your Offer
               </h2>
   
-              <p className="mt-2 text-sm text-slate-500">
-                Buyer ko apni offer
-                bhejein.
+              <p className="mt-1 text-sm text-slate-500">
+                Share your price and a short message with the buyer.
               </p>
             </div>
   
@@ -228,9 +227,7 @@ import {
   
             {!enoughCredits && (
               <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-600">
-                Not enough credits.
-                Admin se credits add
-                karne honge.
+                Not enough credits. Please contact support to add credits.
               </div>
             )}
   
