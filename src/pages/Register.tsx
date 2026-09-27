@@ -19,8 +19,7 @@ import {
 
 import {
   continueWithGoogleDemo,
-  registerUserWithEmail,
-  registerUserWithPhone,
+  registerUser,
 } from "../services/authService";
 import { getPendingRequirement } from "../services/requirementService";
 import type { UserRole } from "../types/marketplace";
@@ -58,6 +57,8 @@ export default function Register() {
       "options"
     );
 
+  const [name, setName] =
+    useState("");
   const [email, setEmail] =
     useState("");
   const [phone, setPhone] =
@@ -129,11 +130,12 @@ export default function Register() {
     setError("");
 
     if (
+      !name.trim() ||
       !email.trim() ||
       !password.trim()
     ) {
       setError(
-        "Email aur password required hain."
+        "Name, email aur password required hain."
       );
       return;
     }
@@ -149,9 +151,11 @@ export default function Register() {
 
     try {
       const user =
-        await registerUserWithEmail({
+        await registerUser({
           role,
+          name: name.trim(),
           email,
+          phone: "",
           password,
         });
 
@@ -176,11 +180,12 @@ export default function Register() {
     setError("");
 
     if (
+      !name.trim() ||
       !phone.trim() ||
       !password.trim()
     ) {
       setError(
-        "Phone number aur password required hain."
+        "Name, phone number aur password required hain."
       );
       return;
     }
@@ -195,10 +200,19 @@ export default function Register() {
     setLoading(true);
 
     try {
+      const normalizedPhone =
+        phone.trim();
+
       const user =
-        await registerUserWithPhone({
+        await registerUser({
           role,
-          phone,
+          name: name.trim(),
+          email:
+            `phone-${normalizedPhone.replace(/\D/g, "")}@khojmarket.local`,
+          phone:
+            normalizedPhone.startsWith("+")
+              ? normalizedPhone
+              : `+92${normalizedPhone.replace(/\D/g, "").replace(/^0/, "")}`,
           password,
         });
 
@@ -395,6 +409,13 @@ export default function Register() {
                 className="mt-7"
               >
                 <FormField
+                  label="Full name"
+                  value={name}
+                  placeholder="Enter your name"
+                  onChange={setName}
+                />
+
+                <FormField
                   label="Email address"
                   type="email"
                   value={email}
@@ -446,6 +467,13 @@ export default function Register() {
                 }
                 className="mt-7"
               >
+                <FormField
+                  label="Full name"
+                  value={name}
+                  placeholder="Enter your name"
+                  onChange={setName}
+                />
+
                 <FormField
                   label="Phone number"
                   value={phone}
