@@ -54,13 +54,6 @@ import {
       setOfferedPrice,
     ] = useState("");
   
-    if (
-      !open ||
-      !requirement
-    ) {
-      return null;
-    }
-  
     useEffect(() => {
       if (!open) {
         setMessage("");
@@ -68,6 +61,13 @@ import {
       }
     }, [open]);
 
+    if (
+      !open ||
+      !requirement
+    ) {
+      return null;
+    }
+  
     const enoughCredits =
       currentBalance >=
       inquiryCost;
