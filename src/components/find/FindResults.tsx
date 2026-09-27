@@ -10,6 +10,7 @@ interface FindResultsProps {
   totalPages: number;
   pageSize: number;
   currentUserRole?: "buyer" | "seller";
+  sentInquiryRequirementIds?: Set<string>;
   onViewRequirement: (
     requirement: PublicRequirement,
   ) => void | Promise<void>;
@@ -27,6 +28,7 @@ export default function FindResults({
   totalPages,
   pageSize,
   currentUserRole,
+  sentInquiryRequirementIds,
   onViewRequirement,
   onSendInquiry,
   onPageChange,
@@ -54,6 +56,7 @@ export default function FindResults({
               key={requirement.id}
               requirement={requirement}
               currentUserRole={currentUserRole}
+              inquiryAlreadySent={sentInquiryRequirementIds?.has(requirement.id) ?? false}
               onView={() =>
                 void onViewRequirement(
                   requirement,
