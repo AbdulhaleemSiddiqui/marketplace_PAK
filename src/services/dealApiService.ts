@@ -9,10 +9,13 @@ export interface MarketplaceDeal {
   sellerUserId: string;
   sellerName: string;
   inquiryId: string;
-  status: "pending_confirmation" | "completed";
+  status: "pending_confirmation" | "completed" | "cancelled";
   buyerConfirmedAt?: string | null;
   sellerConfirmedAt?: string | null;
   completedAt?: string | null;
+  cancelledAt?: string | null;
+  cancelledByUserId?: string | null;
+  cancellationReason?: string | null;
 }
 
 export function startDealCompletion(requirementId: string, inquiryId: string) {
@@ -39,5 +42,15 @@ export function confirmSellerDealCompletion(dealId: string) {
   return apiRequest<MarketplaceDeal>(
     `/api/deals/${dealId}/seller-confirm`,
     { method: "PATCH" },
+  );
+}
+
+export function cancelMarketplaceDeal(dealId: string, reason: string) {
+  return apiRequest<MarketplaceDeal>(
+    `/api/deals/${dealId}/cancel`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ reason: reason.trim() }),
+    },
   );
 }
