@@ -1798,10 +1798,12 @@ function BuyerInquiryCard({
   onReject: () => void;
 }) {
   useEffect(() => {
-    if (inquiry.status === "sent") {
-      void onViewed();
-    }
-  }, [inquiry.id, inquiry.status, onViewed]);
+    if (inquiry.status !== "sent") return;
+
+    void onViewed().catch(() => {
+      // Keep the inquiry actionable if marking it viewed fails.
+    });
+  }, [inquiry.id, inquiry.status]);
 
   return (
     <div className="rounded-2xl border border-slate-200 p-5">
