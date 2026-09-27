@@ -121,7 +121,7 @@ export default function Profile() {
 
 
   const [sellerHistoryTab, setSellerHistoryTab] =
-    useState<"active" | "closed" | "other" | "credits">("active");
+    useState<"active" | "closed" | "reviewed" | "other" | "credits">("active");
   const [dealByRequirement, setDealByRequirement] = useState<Record<string, MarketplaceDeal | null>>({});
   const [reviewedDealIds, setReviewedDealIds] = useState<Set<string>>(new Set());
   const [buyerRequirementsTab, setBuyerRequirementsTab] = useState<"current" | "history">("current");
@@ -432,13 +432,17 @@ const [
   const currentRequirements = requirements.filter(item => item.status !== "completed");
   const completedRequirements = requirements.filter(item => item.status === "completed");
   const visibleRequirements = buyerRequirementsTab === "history" ? completedRequirements : currentRequirements;
+  const sellerReviewedInquiries = sellerInquiries.filter(inquiry => {
+    const deal = dealByRequirement[inquiry.requirementId];
+    return deal?.status === "completed" && reviewedDealIds.has(deal.id);
+  });
   const sellerClosedInquiries = sellerInquiries.filter(inquiry => {
     const deal = dealByRequirement[inquiry.requirementId];
-    return deal?.status === "completed" || deal?.status === "cancelled" || inquiry.status === "completed";
+    return !sellerReviewedInquiries.includes(inquiry) && (deal?.status === "completed" || deal?.status === "cancelled" || inquiry.status === "completed");
   });
   const sellerOtherInquiries = sellerInquiries.filter(inquiry => !sellerClosedInquiries.includes(inquiry) && inquiry.status === "rejected");
   const sellerActiveInquiries = sellerInquiries.filter(inquiry => !sellerClosedInquiries.includes(inquiry) && !sellerOtherInquiries.includes(inquiry));
-  const visibleSellerInquiries = sellerHistoryTab === "closed" ? sellerClosedInquiries : sellerHistoryTab === "other" ? sellerOtherInquiries : sellerActiveInquiries;
+  const visibleSellerInquiries = sellerHistoryTab === "closed" ? sellerClosedInquiries : sellerHistoryTab === "reviewed" ? sellerReviewedInquiries : sellerHistoryTab === "other" ? sellerOtherInquiries : sellerActiveInquiries;
 
   const creditBalance =
     isSeller
@@ -1093,6 +1097,7 @@ for (const imageId of deletedImageIds) {
               {([
                 ["active", "Active", sellerActiveInquiries.length],
                 ["closed", "Closed Deals", sellerClosedInquiries.length],
+                ["reviewed", "Review Submitted", sellerReviewedInquiries.length],
                 ["other", "Other Inquiries", sellerOtherInquiries.length],
                 ["credits", "Credit Transactions", creditTransactions.length],
               ] as const).map(([tab, label, count]) => (
@@ -1105,8 +1110,8 @@ for (const imageId of deletedImageIds) {
 
             {sellerHistoryTab !== "credits" ? (
               <HistoryCard
-                title={sellerHistoryTab === "closed" ? "Closed Deals" : sellerHistoryTab === "other" ? "Other Inquiries" : "Active Inquiries"}
-                subtitle={sellerHistoryTab === "closed" ? "Completed aur cancelled deals" : sellerHistoryTab === "other" ? "Rejected inquiries" : "Buyer requirements par active inquiries"}
+                title={sellerHistoryTab === "closed" ? "Closed Deals" : sellerHistoryTab === "reviewed" ? "Reviewed Deals" : sellerHistoryTab === "other" ? "Other Inquiries" : "Active Inquiries"}
+                subtitle={sellerHistoryTab === "closed" ? "Completed aur cancelled deals; completed deals ko yahan rate kar sakte hain" : sellerHistoryTab === "reviewed" ? "Jin deals par aap review submit kar chuke hain" : sellerHistoryTab === "other" ? "Rejected inquiries" : "Buyer requirements par active inquiries"}
               >
                 {visibleSellerInquiries.length === 0 ? (
                   <EmptyHistory text="Is tab mein abhi koi inquiry nahi hai." />
