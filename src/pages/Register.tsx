@@ -140,9 +140,9 @@ export default function Register() {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       setError(
-        "Password kam az kam 6 characters ka hona chahiye."
+        "Password kam az kam 8 characters ka hona chahiye."
       );
       return;
     }
@@ -190,9 +190,9 @@ export default function Register() {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       setError(
-        "Password kam az kam 6 characters ka hona chahiye."
+        "Password kam az kam 8 characters ka hona chahiye."
       );
       return;
     }
