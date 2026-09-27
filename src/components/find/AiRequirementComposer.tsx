@@ -820,34 +820,73 @@ function BudgetRangeInput({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const parsed =
-    value
-      .replace(/,/g, "")
-      .match(/\d+/g)
-      ?.map(Number) ?? [];
+  const parseRange = (
+    raw: string,
+  ) => {
+    const parts =
+      raw
+        .split(/\s+-\s+/)
+        .map((part) =>
+          parseBudgetAmount(part),
+        )
+        .filter(
+          (amount): amount is number =>
+            amount != null,
+        );
+
+    return {
+      min:
+        parts.length >= 2
+          ? Math.min(parts[0], parts[1])
+          : 0,
+      max:
+        parts.length >= 2
+          ? Math.max(parts[0], parts[1])
+          : parts.length === 1
+            ? parts[0]
+            : MAX_RANGE,
+    };
+  };
+
+  const initial =
+    parseRange(value);
 
   const [minBudget, setMinBudget] =
-    useState(
-      parsed.length >= 2
-        ? Math.min(parsed[0], parsed[1])
-        : 0,
-    );
+    useState(initial.min);
 
   const [maxBudget, setMaxBudget] =
-    useState(
-      parsed.length >= 2
-        ? Math.max(parsed[0], parsed[1])
-        : parsed.length === 1
-          ? parsed[0]
-          : MAX_RANGE,
-    );
+    useState(initial.max);
+
+  useEffect(() => {
+    const next =
+      parseRange(value);
+
+    setMinBudget(next.min);
+    setMaxBudget(next.max);
+  }, [value]);
 
   const update = (
     nextMin: number,
     nextMax: number,
   ) => {
-    const safeMin = Math.min(nextMin, nextMax);
-    const safeMax = Math.max(nextMin, nextMax);
+    const safeMin =
+      Math.max(
+        0,
+        Math.min(
+          nextMin,
+          nextMax,
+          MAX_RANGE,
+        ),
+      );
+
+    const safeMax =
+      Math.min(
+        MAX_RANGE,
+        Math.max(
+          nextMax,
+          safeMin,
+        ),
+      );
 
     setMinBudget(safeMin);
     setMaxBudget(safeMax);
@@ -859,6 +898,48 @@ function BudgetRangeInput({
 
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <label>
+          <span className="mb-1 block text-[10px] font-bold uppercase text-slate-400">
+            Min Price
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={maxBudget}
+            step={1000}
+            value={minBudget}
+            onChange={(event) =>
+              update(
+                Number(event.target.value) || 0,
+                maxBudget,
+              )
+            }
+            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+          />
+        </label>
+
+        <label>
+          <span className="mb-1 block text-[10px] font-bold uppercase text-slate-400">
+            Max Price
+          </span>
+          <input
+            type="number"
+            min={minBudget}
+            max={MAX_RANGE}
+            step={1000}
+            value={maxBudget}
+            onChange={(event) =>
+              update(
+                minBudget,
+                Number(event.target.value) || 0,
+              )
+            }
+            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+          />
+        </label>
+      </div>
+
       <div className="mb-4 flex items-center justify-between gap-3 text-xs font-bold text-slate-700">
         <span>{formatRangeValue(minBudget)}</span>
         <span>{formatRangeValue(maxBudget)}</span>
@@ -883,7 +964,7 @@ function BudgetRangeInput({
           value={minBudget}
           onChange={(event) =>
             update(
-              Math.min(Number(event.target.value), maxBudget),
+              Number(event.target.value),
               maxBudget,
             )
           }
@@ -910,7 +991,7 @@ function BudgetRangeInput({
           onChange={(event) =>
             update(
               minBudget,
-              Math.max(Number(event.target.value), minBudget),
+              Number(event.target.value),
             )
           }
           className="pointer-events-none absolute inset-0 h-7 w-full appearance-none bg-transparent
@@ -929,4 +1010,44 @@ function BudgetRangeInput({
       </div>
     </div>
   );
+}
+
+function parseBudgetAmount(
+  value: string,
+): number | null {
+  const normalized =
+    value
+      .toLowerCase()
+      .replace(/,/g, "")
+      .replace(/pkr/g, "")
+      .trim();
+
+  const match =
+    normalized.match(
+      /(\d+(?:\.\d+)?)\s*(cr|crore|lac|lakh|k)?/,
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const amount =
+    Number(match[1]);
+
+  const unit =
+    match[2] ?? "";
+
+  if (unit === "cr" || unit === "crore") {
+    return Math.round(amount * 10_000_000);
+  }
+
+  if (unit === "lac" || unit === "lakh") {
+    return Math.round(amount * 100_000);
+  }
+
+  if (unit === "k") {
+    return Math.round(amount * 1_000);
+  }
+
+  return Math.round(amount);
 }
