@@ -68,6 +68,12 @@ import type {
   SellerInquiry,
 } from "../types/marketplace";
 
+import {
+  startDealCompletion,
+  getRequirementDeal,
+  confirmSellerDealCompletion,
+} from "../services/dealApiService";
+
 export default function Profile() {
   const navigate =
     useNavigate();
@@ -548,6 +554,28 @@ for (const imageId of deletedImageIds) {
     }
   };
 
+  const handleCompleteDeal = async (inquiry: SellerInquiry) => {
+    if (!window.confirm("Confirm that this deal has been completed with this seller? The seller will also need to confirm.")) return;
+    try {
+      await startDealCompletion(inquiry.requirementId, inquiry.id);
+      setSuccessMessage("Completion sent to seller for confirmation.");
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to start deal completion.");
+    }
+  };
+
+  const handleSellerCompleteDeal = async (inquiry: SellerInquiry) => {
+    try {
+      const deal = await getRequirementDeal(inquiry.requirementId);
+      await confirmSellerDealCompletion(deal.id);
+      setSuccessMessage("Deal completed successfully. You can now review the buyer.");
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Unable to confirm deal completion.");
+    }
+  };
+
   const handleInquiryAction = async (
     inquiryId: string,
     status: "accepted" | "rejected",
@@ -874,6 +902,7 @@ for (const imageId of deletedImageIds) {
                       onReject={() =>
                         void handleInquiryAction(inquiry.id, "rejected")
                       }
+                      onComplete={() => void handleCompleteDeal(inquiry)}
                     />
                   ))}
                 </>
@@ -1022,7 +1051,7 @@ for (const imageId of deletedImageIds) {
                         sellerHistoryPage * SELLER_HISTORY_PAGE_SIZE,
                       )
                       .map((inquiry) => (
-                        <SellerInquiryCard key={inquiry.id} inquiry={inquiry} />
+                        <SellerInquiryCard key={inquiry.id} inquiry={inquiry} onComplete={() => void handleSellerCompleteDeal(inquiry)} />
                       ))}
                     <SimpleHistoryPagination
                       page={sellerHistoryPage}
@@ -1802,6 +1831,7 @@ function BuyerInquiryCard({
   onViewed,
   onAccept,
   onReject,
+  onComplete,
 }: {
   inquiry:
     SellerInquiry;
@@ -1811,6 +1841,8 @@ function BuyerInquiryCard({
   onAccept: () => void;
 
   onReject: () => void;
+
+  onComplete: () => void;
 }) {
   useEffect(() => {
     if (inquiry.status !== "sent") return;
@@ -1869,7 +1901,17 @@ function BuyerInquiryCard({
           )}
         </div>
 
-        {(inquiry.status === "sent" ||
+        {inquiry.status === "accepted" && (
+          <button
+            type="button"
+            onClick={onComplete}
+            className="h-fit rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            Complete Deal
+          </button>
+        )}
+
+                {(inquiry.status === "sent" ||
           inquiry.status === "viewed") && (
           <div className="flex gap-2">
             <button
@@ -1902,9 +1944,10 @@ function BuyerInquiryCard({
 
 function SellerInquiryCard({
   inquiry,
+  onComplete,
 }: {
-  inquiry:
-    SellerInquiry;
+  inquiry: SellerInquiry;
+  onComplete: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 p-5">
@@ -1931,9 +1974,20 @@ function SellerInquiryCard({
           </p>
         </div>
 
-        <span className="h-fit rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold capitalize">
-          {inquiry.status}
-        </span>
+        <div className="flex flex-col items-end gap-2">
+          <span className="h-fit rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold capitalize">
+            {inquiry.status}
+          </span>
+          {inquiry.status === "accepted" && (
+            <button
+              type="button"
+              onClick={onComplete}
+              className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white"
+            >
+              Confirm Completion
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
