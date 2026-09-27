@@ -329,7 +329,7 @@ const [
   }, [user?.id, user?.role, refreshKey]);
 
   useEffect(() => {
-    const relevant = isSeller ? sellerInquiries : buyerInquiries;
+    const relevant = user?.role === "seller" ? sellerInquiries : buyerInquiries;
     const ids = Array.from(new Set(relevant.filter(x => x.status === "accepted" || x.status === "completed").map(x => x.requirementId)));
     if (ids.length === 0) return;
 
@@ -352,7 +352,7 @@ const [
     });
 
     return () => { cancelled = true; };
-  }, [user?.id, isSeller, sellerInquiries, buyerInquiries, refreshKey]);
+  }, [user?.id, user?.role, sellerInquiries, buyerInquiries, refreshKey]);
 
   // =====================================================
   // SUCCESS
