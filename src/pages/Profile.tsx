@@ -1644,12 +1644,6 @@ function RequirementRow({
     item.activityStatus !==
     "inactive";
 
-  useEffect(() => {
-    if (inquiry.status === "sent") {
-      void onViewed();
-    }
-  }, [inquiry.id, inquiry.status, onViewed]);
-
   return (
     <div className="rounded-2xl border border-slate-200 p-5">
       <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
@@ -1803,6 +1797,12 @@ function BuyerInquiryCard({
 
   onReject: () => void;
 }) {
+  useEffect(() => {
+    if (inquiry.status === "sent") {
+      void onViewed();
+    }
+  }, [inquiry.id, inquiry.status, onViewed]);
+
   return (
     <div className="rounded-2xl border border-slate-200 p-5">
       <div className="flex flex-col justify-between gap-5 md:flex-row">
