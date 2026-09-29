@@ -81,6 +81,7 @@ import {
   getDealReviews,
 } from "../services/reviewApiService";
 
+import { reportMarketplaceDeal } from "../services/trustApiService";
 import DealActionDialog, { type DealAction, type DealActionValues } from "../components/deals/DealActionDialog";
 
 export default function Profile() {
@@ -110,7 +111,7 @@ export default function Profile() {
     setRequirementsError,
   ] = useState("");
 
-  const [dealAction, setDealAction] = useState<{ action: DealAction; inquiry: SellerInquiry } | null>(null);
+  const [dealAction, setDealAction] = useState<{ action: Extract<DealAction, "request" | "confirm" | "cancel" | "review" | "report">; inquiry: SellerInquiry } | null>(null);
 
   const [buyerInquiries, setBuyerInquiries] = useState<SellerInquiry[]>([]);
   const [buyerInquiriesLoading, setBuyerInquiriesLoading] = useState(false);
@@ -637,7 +638,11 @@ for (const imageId of deletedImageIds) {
     if (!dealAction) return;
     const { action, inquiry } = dealAction;
     const deal = inquiryDeal(inquiry);
-    if (action === "request") {
+    if (action === "report") {
+      if (!deal) throw new Error("Deal details are unavailable. Refresh and try again.");
+      await reportMarketplaceDeal(deal.id, isSeller ? deal.buyerUserId : deal.sellerUserId, values.category, values.reason);
+      setSuccessMessage("Report submitted. An admin will review your complaint.");
+    } else if (action === "request") {
       const response = await startDealCompletion(inquiry.requirementId, inquiry.id);
       setDealByRequirement(prev => ({ ...prev, [inquiry.requirementId]: response.deal }));
       setSuccessMessage("Completion requested. Waiting for the seller to confirm.");
@@ -658,7 +663,7 @@ for (const imageId of deletedImageIds) {
       }
     }
     setDealAction(null);
-    if (action !== "review") setRefreshKey(value => value + 1);
+    if (action !== "review" && action !== "report") setRefreshKey(value => value + 1);
   };
 
   const handleInquiryAction = async (
@@ -998,6 +1003,7 @@ for (const imageId of deletedImageIds) {
                       onComplete={() => void handleCompleteDeal(inquiry)}
                       onCancel={() => void handleCancelDeal(inquiry)}
                       onReview={() => void handleReviewDeal(inquiry)}
+                          onReport={() => setDealAction({ action: "report", inquiry })}
                     />
                   ))}
                 </>
@@ -1128,6 +1134,7 @@ for (const imageId of deletedImageIds) {
                           onComplete={() => void handleSellerCompleteDeal(inquiry)}
                           onCancel={() => void handleCancelDeal(inquiry)}
                           onReview={() => void handleReviewDeal(inquiry)}
+                          onReport={() => setDealAction({ action: "report", inquiry })}
                         />
                       ))}
                     <SimpleHistoryPagination
@@ -1922,6 +1929,7 @@ function BuyerInquiryCard({
   reviewed,
   onCancel,
   onReview,
+  onReport,
 }: {
   inquiry:
     SellerInquiry;
@@ -1937,6 +1945,7 @@ function BuyerInquiryCard({
   reviewed: boolean;
   onCancel: () => void;
   onReview: () => void;
+  onReport: () => void;
 }) {
   useEffect(() => {
     if (inquiry.status !== "sent") return;
@@ -1986,6 +1995,7 @@ function BuyerInquiryCard({
 
         {(inquiry.status === "accepted" || inquiry.status === "completed") && (
           <div className="flex h-fit flex-wrap gap-2">
+            {deal && <button type="button" onClick={onReport} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Report a problem</button>}
             {!deal && inquiry.status === "accepted" && (
               <button type="button" onClick={onComplete} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">
                 Request Completion
@@ -2046,6 +2056,7 @@ function SellerInquiryCard({
   reviewed,
   onCancel,
   onReview,
+  onReport,
 }: {
   inquiry: SellerInquiry;
   onComplete: () => void;
@@ -2053,6 +2064,7 @@ function SellerInquiryCard({
   reviewed: boolean;
   onCancel: () => void;
   onReview: () => void;
+  onReport: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 p-5">
@@ -2069,6 +2081,7 @@ function SellerInquiryCard({
         </div>
 
         <div className="flex flex-col items-start gap-2 md:items-end">
+          {deal && <button type="button" onClick={onReport} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600">Report a problem</button>}
           {inquiry.status === "accepted" && deal?.status === "pending_confirmation" && (
             <div className="flex flex-wrap justify-end gap-2">
               <button type="button" onClick={onComplete} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white">Confirm Completion</button>

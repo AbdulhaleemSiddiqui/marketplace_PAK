@@ -18,4 +18,12 @@ Completion, cancellation and reviews reuse the existing API services. Dialogs pr
 5. Check multiple offers for one requirement: only the selected inquiry receives the deal state.
 6. Check mobile cards, dialogs, keyboard navigation and refresh persistence against the real API.
 
-Requires backend `feature/deal-completion` APIs and its applied database migration. This PR does not include complaint/admin-trust UI, image storage or deployment.
+Requires backend `feature/deal-completion` APIs and its applied database migration. Image storage and deployment remain separate work.
+
+## Complaints and account moderation
+
+Both deal participants can report the other participant with a category and required details. Reports use the matching deal ID and other participant user ID. Admin Complaints supports pending, warning-issued, dismissed and all filters, with required review notes for warning/dismiss decisions. Blocked Users lists warning counts and allows confirmed unblocking while retaining warnings. User reporting uses user authentication; moderation uses the separate admin session. Failed submissions retain their form and show an inline error.
+
+Additional DOM checks passed for report category/details validation, admin note validation and unblock confirmation. Targeted lint and production build passed. Live API and browser visual checks remain required.
+
+Before release, report from buyer and seller accounts, check the admin pending list, dismiss one complaint and warn another, confirm the third warning blocks the target, then unblock and verify warnings remain. Check filters, failed-request retry, refresh persistence and mobile layout. Requires the backend trust endpoints from backend PR #2.
