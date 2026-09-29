@@ -119,6 +119,8 @@ export type InquiryStatus =
 
 export interface SellerInquiry {
   id: string;
+  requirementTitle?: string;
+  requirementReferenceNo?: string;
 
   requirementId: string;
   buyerUserId: string;

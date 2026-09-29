@@ -1,5 +1,7 @@
 import {
   ArrowLeft,
+  Flag,
+  UserX,
   Coins,
   FileCheck2,
   LayoutDashboard,
@@ -29,7 +31,9 @@ export type AdminSection =
   | "requirements"
   | "sellers"
   | "inquiries"
-  | "credits";
+  | "credits"
+  | "complaints"
+  | "blocked";
 
 interface Props {
   activeSection:
@@ -100,6 +104,8 @@ export default function AdminLayout({
         />
       ),
     },
+    { id: "complaints", label: "Complaints", icon: <Flag size={18} /> },
+    { id: "blocked", label: "Blocked Users", icon: <UserX size={18} /> },
     {
       id: "credits",
       label: "Credits",
@@ -264,3 +270,4 @@ export default function AdminLayout({
     </div>
   );
 }
+

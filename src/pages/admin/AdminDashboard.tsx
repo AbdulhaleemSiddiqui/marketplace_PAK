@@ -13,6 +13,7 @@ import {
 import AdminSellerVerification from "../../components/admin/AdminSellerVerification";
 import AdminCredits from "../../components/admin/AdminCredits";
 import AdminUsers from "../../components/admin/AdminUsers";
+import AdminTrust from "../../components/admin/AdminTrust";
 import AdminInquiries from "../../components/admin/AdminInquiries";
 import {
   useEffect,
@@ -143,6 +144,7 @@ export default function AdminDashboard() {
     onRefresh={refresh}
   />
 )}
+        {(activeSection === "complaints" || activeSection === "blocked") && <AdminTrust key={activeSection} section={activeSection} />}
       </div>
 
       {successMessage && (
@@ -209,6 +211,8 @@ function AdminHeader({
         "Seller-to-buyer inquiry activity.",
     },
 
+    complaints: { title: "Complaints", description: "Review marketplace reports and issue warnings or dismiss complaints." },
+    blocked: { title: "Blocked Users", description: "Review blocked accounts and restore access when appropriate." },
     credits: {
       title:
         "Seller Credits",

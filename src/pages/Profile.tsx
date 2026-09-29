@@ -68,6 +68,22 @@ import type {
   SellerInquiry,
 } from "../types/marketplace";
 
+import {
+  startDealCompletion,
+  getRequirementDeal,
+  confirmSellerDealCompletion,
+  cancelMarketplaceDeal,
+  type MarketplaceDeal,
+} from "../services/dealApiService";
+
+import {
+  createMarketplaceReview,
+  getDealReviews,
+} from "../services/reviewApiService";
+
+import { reportMarketplaceDeal } from "../services/trustApiService";
+import DealActionDialog, { type DealAction, type DealActionValues } from "../components/deals/DealActionDialog";
+
 export default function Profile() {
   const navigate =
     useNavigate();
@@ -95,6 +111,8 @@ export default function Profile() {
     setRequirementsError,
   ] = useState("");
 
+  const [dealAction, setDealAction] = useState<{ action: Extract<DealAction, "request" | "confirm" | "cancel" | "review" | "report">; inquiry: SellerInquiry } | null>(null);
+
   const [buyerInquiries, setBuyerInquiries] = useState<SellerInquiry[]>([]);
   const [buyerInquiriesLoading, setBuyerInquiriesLoading] = useState(false);
   const [buyerInquiriesError, setBuyerInquiriesError] = useState("");
@@ -108,7 +126,11 @@ export default function Profile() {
 
 
   const [sellerHistoryTab, setSellerHistoryTab] =
-    useState<"inquiries" | "credits">("inquiries");
+    useState<"active" | "closed" | "reviewed" | "other" | "credits">("active");
+  const [dealByRequirement, setDealByRequirement] = useState<Record<string, MarketplaceDeal | null>>({});
+  const [reviewedDealIds, setReviewedDealIds] = useState<Set<string>>(new Set());
+  const [buyerInquiryTab, setBuyerInquiryTab] = useState<"current" | "reviewed">("current");
+  const [buyerRequirementsTab, setBuyerRequirementsTab] = useState<"current" | "history">("current");
   const [sellerHistoryPage, setSellerHistoryPage] = useState(1);
   const SELLER_HISTORY_PAGE_SIZE = 5;
 
@@ -313,6 +335,32 @@ const [
     };
   }, [user?.id, user?.role, refreshKey]);
 
+  useEffect(() => {
+    const relevant = user?.role === "seller" ? sellerInquiries : buyerInquiries;
+    const ids = Array.from(new Set(relevant.filter(x => x.status === "accepted" || x.status === "completed").map(x => x.requirementId)));
+    if (ids.length === 0) return;
+
+    let cancelled = false;
+    void Promise.all(ids.map(async id => {
+      try { return [id, await getRequirementDeal(id)] as const; }
+      catch { return [id, null] as const; }
+    })).then(async entries => {
+      if (cancelled) return;
+      const map = Object.fromEntries(entries);
+      setDealByRequirement(prev => ({ ...prev, ...map }));
+      const completedDeals = entries.map(x => x[1]).filter((x): x is MarketplaceDeal => !!x && x.status === "completed");
+      const reviewChecks = await Promise.all(completedDeals.map(async deal => {
+        try {
+          const reviews = await getDealReviews(deal.id);
+          return reviews.some(review => review.reviewerUserId === user?.id) ? deal.id : null;
+        } catch { return null; }
+      }));
+      if (!cancelled) setReviewedDealIds(new Set(reviewChecks.filter((x): x is string => !!x)));
+    });
+
+    return () => { cancelled = true; };
+  }, [user?.id, user?.role, sellerInquiries, buyerInquiries, refreshKey]);
+
   // =====================================================
   // SUCCESS
   // =====================================================
@@ -386,6 +434,33 @@ const [
   // =====================================================
   // SELLER
   // =====================================================
+
+  const inquiryDeal = (inquiry: SellerInquiry) => {
+    const deal = dealByRequirement[inquiry.requirementId];
+    return deal?.inquiryId === inquiry.id ? deal : null;
+  };
+
+  const currentRequirements = requirements.filter(item => item.status !== "completed");
+  const completedRequirements = requirements.filter(item => item.status === "completed");
+  const visibleRequirements = buyerRequirementsTab === "history" ? completedRequirements : currentRequirements;
+  const sellerReviewedInquiries = sellerInquiries.filter(inquiry => {
+    const deal = inquiryDeal(inquiry);
+    return deal?.status === "completed" && reviewedDealIds.has(deal.id);
+  });
+  const sellerClosedInquiries = sellerInquiries.filter(inquiry => {
+    const deal = inquiryDeal(inquiry);
+    return !sellerReviewedInquiries.includes(inquiry) && (deal?.status === "completed" || deal?.status === "cancelled" || inquiry.status === "completed");
+  });
+  const sellerOtherInquiries = sellerInquiries.filter(inquiry => !sellerClosedInquiries.includes(inquiry) && !sellerReviewedInquiries.includes(inquiry) && inquiry.status === "rejected");
+  const sellerActiveInquiries = sellerInquiries.filter(inquiry => !sellerClosedInquiries.includes(inquiry) && !sellerReviewedInquiries.includes(inquiry) && !sellerOtherInquiries.includes(inquiry));
+  const visibleSellerInquiries = sellerHistoryTab === "closed" ? sellerClosedInquiries : sellerHistoryTab === "reviewed" ? sellerReviewedInquiries : sellerHistoryTab === "other" ? sellerOtherInquiries : sellerActiveInquiries;
+
+  const buyerReviewedInquiries = buyerInquiries.filter(inquiry => {
+    const deal = inquiryDeal(inquiry);
+    return deal?.status === "completed" && reviewedDealIds.has(deal.id);
+  });
+  const buyerCurrentInquiries = buyerInquiries.filter(inquiry => !buyerReviewedInquiries.includes(inquiry));
+  const visibleBuyerInquiries = buyerInquiryTab === "reviewed" ? buyerReviewedInquiries : buyerCurrentInquiries;
 
   const creditBalance =
     isSeller
@@ -495,6 +570,7 @@ for (const imageId of deletedImageIds) {
   const handleEditRequirement = async (
     requirement: RequirementListItem,
   ) => {
+    if (requirement.status === "completed") return;
     try {
       const details =
         await getRequirementDetails(
@@ -546,6 +622,48 @@ for (const imageId of deletedImageIds) {
           : "Unable to update requirement.",
       );
     }
+  };
+
+  const handleCompleteDeal = (inquiry: SellerInquiry) => setDealAction({ action: "request", inquiry });
+  const handleSellerCompleteDeal = (inquiry: SellerInquiry) => setDealAction({ action: "confirm", inquiry });
+  const handleCancelDeal = (inquiry: SellerInquiry) => {
+    if (inquiryDeal(inquiry)?.status === "pending_confirmation") setDealAction({ action: "cancel", inquiry });
+  };
+  const handleReviewDeal = (inquiry: SellerInquiry) => {
+    const deal = inquiryDeal(inquiry);
+    if (deal?.status === "completed" && !reviewedDealIds.has(deal.id)) setDealAction({ action: "review", inquiry });
+  };
+
+  const submitDealAction = async (values: DealActionValues) => {
+    if (!dealAction) return;
+    const { action, inquiry } = dealAction;
+    const deal = inquiryDeal(inquiry);
+    if (action === "report") {
+      if (!deal) throw new Error("Deal details are unavailable. Refresh and try again.");
+      await reportMarketplaceDeal(deal.id, isSeller ? deal.buyerUserId : deal.sellerUserId, values.category, values.reason);
+      setSuccessMessage("Report submitted. An admin will review your complaint.");
+    } else if (action === "request") {
+      const response = await startDealCompletion(inquiry.requirementId, inquiry.id);
+      setDealByRequirement(prev => ({ ...prev, [inquiry.requirementId]: response.deal }));
+      setSuccessMessage("Completion requested. Waiting for the seller to confirm.");
+    } else {
+      if (!deal) throw new Error("Deal details are unavailable. Refresh your profile and try again.");
+      if (action === "review") {
+        await createMarketplaceReview(deal.id, values.rating, values.comment);
+        setReviewedDealIds(prev => new Set(prev).add(deal.id));
+        setSellerHistoryPage(1);
+        setSuccessMessage("Review submitted. This deal is now in Review Submitted history.");
+      } else {
+        const updated = action === "confirm"
+          ? await confirmSellerDealCompletion(deal.id)
+          : await cancelMarketplaceDeal(deal.id, values.reason);
+        setDealByRequirement(prev => ({ ...prev, [inquiry.requirementId]: updated }));
+        setSellerHistoryPage(1);
+        setSuccessMessage(action === "confirm" ? "Deal completed. You can now leave a review." : "Deal cancelled. Your reason has been saved.");
+      }
+    }
+    setDealAction(null);
+    if (action !== "review" && action !== "report") setRefreshKey(value => value + 1);
   };
 
   const handleInquiryAction = async (
@@ -792,10 +910,18 @@ for (const imageId of deletedImageIds) {
 </div>
 
             {/* REQUIREMENTS */}
+            <div className="mt-8 flex flex-wrap gap-2" role="tablist" aria-label="My requirements">
+              {(["current", "history"] as const).map(tab => (
+                <button key={tab} type="button" role="tab" aria-selected={buyerRequirementsTab === tab}
+                  onClick={() => setBuyerRequirementsTab(tab)}
+                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${buyerRequirementsTab === tab ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+                >{tab === "current" ? `Current (${currentRequirements.length})` : `History (${completedRequirements.length})`}</button>
+              ))}
+            </div>
 
             <HistoryCard
-              title="My Requirements"
-              subtitle="Aapki buyer requirement history"
+              title={buyerRequirementsTab === "history" ? "Completed Requirements" : "My Requirements"}
+              subtitle={buyerRequirementsTab === "history" ? "Completed marketplace requirements" : "Current marketplace requirements"}
             >
               {requirementsLoading ? (
                 <div className="py-14 text-center text-sm text-slate-400">
@@ -805,35 +931,33 @@ for (const imageId of deletedImageIds) {
                 <div className="py-14 text-center text-sm font-semibold text-red-500">
                   {requirementsError}
                 </div>
-              ) : requirements.length === 0 ? (
-                <EmptyHistory
-                  text="Abhi koi buyer requirement nahi hai."
-                />
+              ) : visibleRequirements.length === 0 ? (
+                <EmptyHistory text={buyerRequirementsTab === "history" ? "Abhi koi completed requirement nahi hai." : "Abhi koi current requirement nahi hai."} />
               ) : (
-                requirements.map((item) => (
+                visibleRequirements.map((item) => (
                   <RequirementRow
                     key={item.id}
                     item={item}
                     inquiryCount={
                       item.inquiryCount ?? 0
                     }
-                    onEdit={() =>
-                      void handleEditRequirement(item)
-                    }
-                    onToggleActivity={() =>
-                      void handleToggleRequirementActivity(
-                        item,
-                      )
-                    }
+                    onEdit={item.status === "completed" ? undefined : () => void handleEditRequirement(item)}
+                    onToggleActivity={item.status === "completed" ? undefined : () => void handleToggleRequirementActivity(item)}
                   />
                 ))
               )}
             </HistoryCard>
 
             {/* INQUIRIES */}
+            <div className="mt-8 flex flex-wrap gap-2" role="tablist" aria-label="Seller inquiries">
+              {(["current", "reviewed"] as const).map(tab => <button key={tab} type="button" role="tab" aria-selected={buyerInquiryTab === tab} onClick={() => setBuyerInquiryTab(tab)}
+                className={`rounded-xl px-4 py-2 text-sm font-bold ${buyerInquiryTab === tab ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-500"}`}>
+                {tab === "current" ? `Offers & Deals (${buyerCurrentInquiries.length})` : `Review Submitted (${buyerReviewedInquiries.length})`}
+              </button>)}
+            </div>
 
             <HistoryCard
-              title="Seller Inquiries"
+              title={buyerInquiryTab === "reviewed" ? "Reviewed Deals" : "Seller Inquiries"}
               subtitle="Aapki requirements par sellers ki offers"
             >
               {buyerInquiriesLoading ? (
@@ -844,9 +968,9 @@ for (const imageId of deletedImageIds) {
                 <div className="py-14 text-center text-sm font-semibold text-red-500">
                   {buyerInquiriesError}
                 </div>
-              ) : buyerInquiries.length === 0 ? (
+              ) : visibleBuyerInquiries.length === 0 ? (
                 <EmptyHistory
-                  text="Abhi koi seller inquiry receive nahi hui."
+                  text={buyerInquiryTab === "reviewed" ? "Abhi koi review submit nahi hua." : "Abhi koi seller inquiry receive nahi hui."}
                 />
               ) : (
                 <>
@@ -856,7 +980,7 @@ for (const imageId of deletedImageIds) {
                     </div>
                   )}
 
-                  {buyerInquiries.map((inquiry) => (
+                  {visibleBuyerInquiries.map((inquiry) => (
                     <BuyerInquiryCard
                       key={inquiry.id}
                       inquiry={inquiry}
@@ -874,6 +998,12 @@ for (const imageId of deletedImageIds) {
                       onReject={() =>
                         void handleInquiryAction(inquiry.id, "rejected")
                       }
+                      deal={inquiryDeal(inquiry)}
+                      reviewed={!!inquiryDeal(inquiry) && reviewedDealIds.has(inquiryDeal(inquiry)!.id)}
+                      onComplete={() => void handleCompleteDeal(inquiry)}
+                      onCancel={() => void handleCancelDeal(inquiry)}
+                      onReview={() => void handleReviewDeal(inquiry)}
+                          onReport={() => setDealAction({ action: "report", inquiry })}
                     />
                   ))}
                 </>
@@ -953,11 +1083,7 @@ for (const imageId of deletedImageIds) {
                 }
                 label="Accepted"
                 value={
-                  sellerInquiries.filter(
-                    (item) =>
-                      item.status ===
-                      "accepted"
-                  ).length
+                  sellerActiveInquiries.filter(item => item.status === "accepted").length
                 }
               />
 
@@ -965,68 +1091,55 @@ for (const imageId of deletedImageIds) {
                 icon={<Box />}
                 label="Completed"
                 value={
-                  sellerInquiries.filter(
-                    (item) =>
-                      item.status ===
-                      "completed"
-                  ).length
+                  sellerInquiries.filter(item => inquiryDeal(item)?.status === "completed" || item.status === "completed").length
                 }
               />
             </div>
 
-            <div className="mt-8">
-              <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSellerHistoryTab("inquiries");
-                    setSellerHistoryPage(1);
-                  }}
-                  className={`rounded-lg px-4 py-2 text-sm font-bold transition ${
-                    sellerHistoryTab === "inquiries"
-                      ? "bg-slate-950 text-white"
-                      : "text-slate-500 hover:bg-slate-50"
-                  }`}
-                >
-                  My Sent Inquiries
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSellerHistoryTab("credits");
-                    setSellerHistoryPage(1);
-                  }}
-                  className={`rounded-lg px-4 py-2 text-sm font-bold transition ${
-                    sellerHistoryTab === "credits"
-                      ? "bg-slate-950 text-white"
-                      : "text-slate-500 hover:bg-slate-50"
-                  }`}
-                >
-                  Credit Transactions
-                </button>
-              </div>
+            <div className="mt-8 flex flex-wrap gap-2" role="tablist" aria-label="Seller activity">
+              {([
+                ["active", "Active", sellerActiveInquiries.length],
+                ["closed", "Closed Deals", sellerClosedInquiries.length],
+                ["reviewed", "Review Submitted", sellerReviewedInquiries.length],
+                ["other", "Other Inquiries", sellerOtherInquiries.length],
+                ["credits", "Credit Transactions", creditTransactions.length],
+              ] as const).map(([tab, label, count]) => (
+                <button key={tab} type="button" role="tab" aria-selected={sellerHistoryTab === tab}
+                  onClick={() => { setSellerHistoryTab(tab); setSellerHistoryPage(1); }}
+                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${sellerHistoryTab === tab ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+                >{label} ({count})</button>
+              ))}
             </div>
 
-            {sellerHistoryTab === "inquiries" ? (
+            {sellerHistoryTab !== "credits" ? (
               <HistoryCard
-                title="My Sent Inquiries"
-                subtitle="Buyer requirements par bheji hui inquiries"
+                title={sellerHistoryTab === "closed" ? "Closed Deals" : sellerHistoryTab === "reviewed" ? "Reviewed Deals" : sellerHistoryTab === "other" ? "Other Inquiries" : "Active Inquiries"}
+                subtitle={sellerHistoryTab === "closed" ? "Completed aur cancelled deals; completed deals ko yahan rate kar sakte hain" : sellerHistoryTab === "reviewed" ? "Jin deals par aap review submit kar chuke hain" : sellerHistoryTab === "other" ? "Rejected inquiries" : "Buyer requirements par active inquiries"}
               >
-                {sellerInquiries.length === 0 ? (
-                  <EmptyHistory text="Abhi koi inquiry send nahi ki." />
+                {visibleSellerInquiries.length === 0 ? (
+                  <EmptyHistory text="Is tab mein abhi koi inquiry nahi hai." />
                 ) : (
                   <>
-                    {sellerInquiries
+                    {visibleSellerInquiries
                       .slice(
                         (sellerHistoryPage - 1) * SELLER_HISTORY_PAGE_SIZE,
                         sellerHistoryPage * SELLER_HISTORY_PAGE_SIZE,
                       )
                       .map((inquiry) => (
-                        <SellerInquiryCard key={inquiry.id} inquiry={inquiry} />
+                        <SellerInquiryCard
+                          key={inquiry.id}
+                          inquiry={inquiry}
+                          deal={inquiryDeal(inquiry)}
+                          reviewed={!!inquiryDeal(inquiry) && reviewedDealIds.has(inquiryDeal(inquiry)!.id)}
+                          onComplete={() => void handleSellerCompleteDeal(inquiry)}
+                          onCancel={() => void handleCancelDeal(inquiry)}
+                          onReview={() => void handleReviewDeal(inquiry)}
+                          onReport={() => setDealAction({ action: "report", inquiry })}
+                        />
                       ))}
                     <SimpleHistoryPagination
                       page={sellerHistoryPage}
-                      totalItems={sellerInquiries.length}
+                      totalItems={visibleSellerInquiries.length}
                       pageSize={SELLER_HISTORY_PAGE_SIZE}
                       onPageChange={setSellerHistoryPage}
                     />
@@ -1088,6 +1201,15 @@ for (const imageId of deletedImageIds) {
           </>
         )}
       </main>
+
+      {dealAction && <DealActionDialog
+        key={`${dealAction.action}-${dealAction.inquiry.id}`}
+        action={dealAction.action}
+        title={dealAction.inquiry.requirementTitle || inquiryDeal(dealAction.inquiry)?.requirementTitle || "Marketplace requirement"}
+        counterpart={isSeller ? "the buyer" : dealAction.inquiry.sellerName || "the seller"}
+        onClose={() => setDealAction(null)}
+        onSubmit={submitDealAction}
+      />}
 
       {/* EDIT REQUIREMENT */}
 
@@ -1802,6 +1924,12 @@ function BuyerInquiryCard({
   onViewed,
   onAccept,
   onReject,
+  onComplete,
+  deal,
+  reviewed,
+  onCancel,
+  onReview,
+  onReport,
 }: {
   inquiry:
     SellerInquiry;
@@ -1811,6 +1939,13 @@ function BuyerInquiryCard({
   onAccept: () => void;
 
   onReject: () => void;
+
+  onComplete: () => void;
+  deal?: MarketplaceDeal | null;
+  reviewed: boolean;
+  onCancel: () => void;
+  onReview: () => void;
+  onReport: () => void;
 }) {
   useEffect(() => {
     if (inquiry.status !== "sent") return;
@@ -1830,18 +1965,7 @@ function BuyerInquiryCard({
             }
           </p>
 
-          <span className="mt-2 inline-block rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize">
-            {inquiry.status}
-          </span>
-
-          {inquiry.offeredPrice && (
-            <p className="mt-3 font-bold text-blue-600">
-              Offer:{" "}
-              {
-                inquiry.offeredPrice
-              }
-            </p>
-          )}
+          <DealCardSummary inquiry={inquiry} deal={deal} reviewed={reviewed} />
 
           <p className="mt-3 text-sm leading-6 text-slate-600">
             {inquiry.message}
@@ -1869,7 +1993,32 @@ function BuyerInquiryCard({
           )}
         </div>
 
-        {(inquiry.status === "sent" ||
+        {(inquiry.status === "accepted" || inquiry.status === "completed") && (
+          <div className="flex h-fit flex-wrap gap-2">
+            {deal && <button type="button" onClick={onReport} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Report a problem</button>}
+            {!deal && inquiry.status === "accepted" && (
+              <button type="button" onClick={onComplete} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">
+                Request Completion
+              </button>
+            )}
+            {deal?.status === "pending_confirmation" && (
+              <>
+                <span className="rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700">Waiting for Seller</span>
+                <button type="button" onClick={onCancel} className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600">Cancel Deal</button>
+              </>
+            )}
+            {deal?.status === "completed" && (
+              reviewed
+                ? <span className="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700">Review Submitted</span>
+                : <button type="button" onClick={onReview} className="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white">Rate Seller</button>
+            )}
+            {deal?.status === "cancelled" && (
+              <span className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-600">Deal Cancelled</span>
+            )}
+          </div>
+        )}
+
+                {(inquiry.status === "sent" ||
           inquiry.status === "viewed") && (
           <div className="flex gap-2">
             <button
@@ -1902,41 +2051,78 @@ function BuyerInquiryCard({
 
 function SellerInquiryCard({
   inquiry,
+  onComplete,
+  deal,
+  reviewed,
+  onCancel,
+  onReview,
+  onReport,
 }: {
-  inquiry:
-    SellerInquiry;
+  inquiry: SellerInquiry;
+  onComplete: () => void;
+  deal?: MarketplaceDeal | null;
+  reviewed: boolean;
+  onCancel: () => void;
+  onReview: () => void;
+  onReport: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 p-5">
-      <div className="flex justify-between gap-4">
+      <div className="flex flex-col justify-between gap-5 md:flex-row">
         <div>
-          {inquiry.offeredPrice && (
-            <p className="font-bold text-blue-600">
-              {
-                inquiry.offeredPrice
-              }
-            </p>
-          )}
+          <DealCardSummary inquiry={inquiry} deal={deal} reviewed={reviewed} />
 
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {inquiry.message}
           </p>
 
-          <p className="mt-2 text-xs text-slate-400">
-            Cost:{" "}
-            {
-              inquiry.creditCost
-            }{" "}
-            Credits
-          </p>
+          {inquiry.creditCost != null && <p className="mt-2 text-xs text-slate-400">Cost: {inquiry.creditCost} credits</p>}
+          {inquiry.status === "accepted" && !deal && <p className="mt-3 text-sm text-slate-500">Offer accepted. Completion confirmation will be available when the buyer sends a request.</p>}
         </div>
 
-        <span className="h-fit rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold capitalize">
-          {inquiry.status}
-        </span>
+        <div className="flex flex-col items-start gap-2 md:items-end">
+          {deal && <button type="button" onClick={onReport} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600">Report a problem</button>}
+          {inquiry.status === "accepted" && deal?.status === "pending_confirmation" && (
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={onComplete} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white">Confirm Completion</button>
+              <button type="button" onClick={onCancel} className="rounded-xl border border-red-200 px-4 py-2.5 text-xs font-bold text-red-600">Cancel Deal</button>
+            </div>
+          )}
+          {deal?.status === "completed" && (
+            reviewed
+              ? <span className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">Review Submitted</span>
+              : <button type="button" onClick={onReview} className="rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-white">Rate Buyer</button>
+          )}
+          {deal?.status === "cancelled" && (
+            <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600">Cancelled</span>
+          )}
+        </div>
       </div>
     </div>
   );
+}
+
+function DealCardSummary({ inquiry, deal, reviewed }: { inquiry: SellerInquiry; deal?: MarketplaceDeal | null; reviewed: boolean }) {
+  const completed = deal?.status === "completed" || inquiry.status === "completed";
+  const cancelled = deal?.status === "cancelled";
+  const pending = deal?.status === "pending_confirmation";
+  const accepted = inquiry.status === "accepted" || completed || pending || cancelled;
+  const label = reviewed ? "Review submitted" : cancelled ? "Cancelled" : completed ? "Completed · review pending" : pending ? "Waiting for seller confirmation" : inquiry.status === "accepted" ? "Offer accepted" : inquiry.status === "viewed" ? "Viewed by buyer" : inquiry.status === "rejected" ? "Offer declined" : "Inquiry sent";
+  const tone = cancelled || inquiry.status === "rejected" ? "bg-slate-100 text-slate-600" : completed ? "bg-emerald-50 text-emerald-700" : pending ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700";
+  const price = Number(inquiry.offeredPrice);
+  const steps = ["Accepted", "Completion requested", "Completed", "Reviewed"];
+  const stage = reviewed ? 4 : completed ? 3 : pending ? 2 : accepted ? 1 : 0;
+  return <div className="mt-3">
+    <p className="text-base font-black text-slate-900">{inquiry.requirementTitle || deal?.requirementTitle || "Marketplace requirement"}</p>
+    {(inquiry.requirementReferenceNo || deal?.requirementReferenceNo) && <p className="mt-1 text-xs font-semibold text-slate-400">{inquiry.requirementReferenceNo || deal?.requirementReferenceNo}</p>}
+    <div className="mt-3 flex flex-wrap items-center gap-3">
+      <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${tone}`}>{label}</span>
+      {inquiry.offeredPrice != null && inquiry.offeredPrice !== "" && <span className="text-sm font-black text-blue-700">Offer: {Number.isFinite(price) ? new Intl.NumberFormat("en-PK", { style: "currency", currency: "PKR", maximumFractionDigits: 0 }).format(price) : inquiry.offeredPrice}</span>}
+    </div>
+    {accepted && !cancelled && <ol aria-label="Deal progress" className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{steps.map((step, index) => <li key={step} className={`rounded-lg border px-2 py-2 text-[11px] font-semibold ${index < stage ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-slate-100 text-slate-400"}`}>{index < stage ? "✓" : index + 1} {step}</li>)}</ol>}
+    {cancelled && deal?.cancellationReason && <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-600"><span className="font-bold">Cancellation reason: </span>{deal.cancellationReason}</p>}
+    <p className="mt-3 text-xs text-slate-400">Sent {new Date(inquiry.createdAt).toLocaleDateString()}{deal?.completedAt ? ` · Completed ${new Date(deal.completedAt).toLocaleDateString()}` : ""}</p>
+  </div>;
 }
 
 // =====================================================
@@ -2052,3 +2238,4 @@ function SimpleHistoryPagination({
     </div>
   );
 }
+
