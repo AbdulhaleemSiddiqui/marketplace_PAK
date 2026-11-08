@@ -31,3 +31,15 @@ export function getSellerInquiriesApi() {
       "/api/inquiries/seller/mine",
     );
   }
+
+ 
+export function submitSellerVerification(request: {
+  businessName: string;
+  city: string;
+  category: string;
+}) {
+  return apiRequest<void>("/api/auth/seller/verification", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
