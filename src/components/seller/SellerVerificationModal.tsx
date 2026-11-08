@@ -96,14 +96,11 @@ import {
               </p>
   
               <h2 className="mt-1 text-2xl font-black">
-                Verify Seller
+                Submit for Verification
               </h2>
   
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                Verified sellers hi
-                buyer requirements par
-                paid inquiry send kar
-                sakenge.
+                Submit your business details for admin review. Verified sellers can send paid inquiries on buyer requirements.
               </p>
             </div>
   
@@ -226,15 +223,8 @@ import {
               </select>
             </div>
   
-            <div className="mt-6 rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-800">
-              <strong>
-                Demo mode:
-              </strong>{" "}
-              abhi verification
-              instantly approve hogi.
-              Production mein request
-              Admin Verification Queue
-              mein jayegi.
+            <div className="mt-6 rounded-2xl bg-blue-50 p-4 text-sm leading-6 text-blue-800">
+              Your request will be sent to the Admin Verification Queue. You can send paid inquiries after admin approval.
             </div>
   
             <button
