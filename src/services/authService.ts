@@ -30,6 +30,9 @@ interface ApiAuthUser {
   sellerVerificationStatus?:
     | SellerVerificationStatus
     | null;
+  businessName?: string | null;
+  businessCity?: string | null;
+  businessCategory?: string | null;
 }
 
 interface AuthResponse {
@@ -62,6 +65,9 @@ function toFrontendUser(
     sellerVerificationStatus:
       apiUser.sellerVerificationStatus ??
       undefined,
+    businessName: apiUser.businessName ?? undefined,
+    businessCity: apiUser.businessCity ?? undefined,
+    businessCategory: apiUser.businessCategory ?? undefined,
     createdAt:
       new Date().toISOString(),
   } as User;
