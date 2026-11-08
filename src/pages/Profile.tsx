@@ -34,7 +34,7 @@ import SellerVerificationModal from "../components/seller/SellerVerificationModa
 import {
   getCurrentUser,
   logoutUser,
-  verifySellerForDemo,
+  refreshCurrentUser,
 } from "../services/authService";
 
 import {
@@ -48,6 +48,7 @@ import {
   getSellerWallet,
   getSellerWalletTransactions,
   getSellerInquiriesApi,
+  submitSellerVerification,
   type SellerWalletTransaction,
 } from "../services/sellerProfileApiService";
 
@@ -575,32 +576,32 @@ for (const imageId of deletedImageIds) {
     }
   };
 
-  const handleSellerVerification = (
+  const handleSellerVerification = async (
     businessName: string,
     city: string,
     category: string
   ) => {
-    verifySellerForDemo(
-      user.id,
-      businessName,
-      city,
-      category
-    );
+    try {
+      await submitSellerVerification({
+        businessName,
+        city,
+        category,
+      });
 
-    setShowSellerVerification(
-      false
-    );
+      await refreshCurrentUser();
 
-    setSuccessMessage(
-      "Seller verified successfully."
-    );
-
-    setRefreshKey(
-      (value) =>
-        value + 1
-    );
-
-    window.location.reload();
+      setShowSellerVerification(false);
+      setSuccessMessage(
+        "Verification request submitted. Admin review is pending."
+      );
+      setRefreshKey((value) => value + 1);
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to submit seller verification request.",
+      );
+    }
   };
 
   return (
